@@ -16,7 +16,7 @@ import ReactFlow, {
 import "reactflow/dist/style.css";
 import dagre from "dagre";
 import { toPng } from "html-to-image";
-import { User, X, Save, Plus, Trash2, Edit3, ArrowUp, ArrowDown, Link as LinkIcon, RefreshCcw, Loader2, Upload, Download, Share2, Gift } from "lucide-react";
+import { User, X, Save, Plus, Trash2, Edit3, ArrowUp, ArrowDown, Link as LinkIcon, RefreshCcw, Loader2, Upload, Download, Share2, Gift, Search } from "lucide-react";
 
 // --- GOOGLE LOGO ---
 const GoogleIcon = () => (
@@ -51,7 +51,7 @@ const FamilyNode = ({ data }) => {
   }
   
   const isBday = isBirthdayToday(data.dob);
-  const borderColor = isBday ? "#fbbf24" : (data.gender === "Male" ? "#3b82f6" : "#ec4899"); // Gold if birthday
+  const borderColor = isBday ? "#fbbf24" : (data.gender === "Male" ? "#3b82f6" : "#ec4899"); 
   const shadow = isBday ? "0 0 15px rgba(251, 191, 36, 0.6)" : "0 4px 6px -1px rgba(0, 0, 0, 0.5)";
 
   return (
@@ -112,7 +112,10 @@ function FamilyManagerInner() {
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [statusMsg, setStatusMsg] = useState("Ready");
-  const [readOnly, setReadOnly] = useState(false); // New Read-Only State
+  const [readOnly, setReadOnly] = useState(false);
+  
+  // Search State
+  const [searchQuery, setSearchQuery] = useState("");
   
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
@@ -131,14 +134,12 @@ function FamilyManagerInner() {
   const [membersList, setMembersList] = useState([]); 
 
   useEffect(() => {
-    // Check for Share Link
     const params = new URLSearchParams(window.location.search);
     const shareId = params.get("share_id");
-
     if (shareId) {
         setReadOnly(true);
         fetchAndDrawGraph(shareId);
-        setSession({ user: { id: "GUEST" } }); // Fake session for UI
+        setSession({ user: { id: "GUEST" } });
     } else {
         supabase.auth.getSession().then(({ data: { session } }) => {
           setSession(session);
@@ -153,7 +154,7 @@ function FamilyManagerInner() {
   }, []);
 
   const onNodeDragStop = useCallback(async (event, node) => {
-      if (readOnly) return; // Disable drag save in read-only
+      if (readOnly) return;
       await supabase.from("family_members").update({ 
           position_x: node.position.x, 
           position_y: node.position.y 
@@ -191,7 +192,20 @@ function FamilyManagerInner() {
       }).catch((err) => { console.error(err); setStatusMsg("Download Error"); });
   };
 
-  // --- NEW: SHARE FUNCTION ---
+  // --- NEW: SEARCH & FLY FUNCTION ---
+  const handleSearch = (e) => {
+      e.preventDefault();
+      if (!searchQuery.trim()) return;
+
+      const target = nodes.find(n => n.data.name.toLowerCase().includes(searchQuery.toLowerCase()));
+      if (target) {
+          fitView({ nodes: [{ id: target.id }], duration: 1000, padding: 2 }); // Zoom to node with animation
+          setStatusMsg(`Found: ${target.data.name}`);
+      } else {
+          alert("Person not found!");
+      }
+  };
+
   const handleShare = async () => {
       if (!session || readOnly) return;
       const link = `${window.location.origin}?share_id=${session.user.id}`;
@@ -207,10 +221,8 @@ function FamilyManagerInner() {
     if (!targetUserId) return;
     setStatusMsg("Syncing...");
     
-    // IF ReadOnly -> Use RPC. IF Owner -> Use Standard Select
     let members, error;
     if (readOnly || (targetUserId && targetUserId !== session?.user?.id)) {
-        // Use the Secure Function we created in SQL
         const res = await supabase.rpc('get_shared_tree', { target_user_id: targetUserId });
         members = res.data;
         error = res.error;
@@ -277,7 +289,7 @@ function FamilyManagerInner() {
   }
 
   const onNodeClick = useCallback((event, node) => {
-    if (readOnly) return; // Disable clicks in read-only
+    if (readOnly) return; 
     setTargetNode(node); 
     setFormData(node.data); 
     setModalMode("menu");
@@ -387,9 +399,22 @@ function FamilyManagerInner() {
       <div className="absolute top-4 left-4 z-10 flex gap-4">
         {readOnly && <div className="bg-yellow-500 text-black px-4 py-2 rounded-full font-bold shadow-lg animate-pulse flex items-center gap-2">👀 Guest Mode (Read Only)</div>}
         {!readOnly && (
-            <div className="bg-black/40 backdrop-blur px-4 py-2 rounded-full border border-gray-700 flex items-center gap-2">
-                <div className={`w-2 h-2 rounded-full ${statusMsg.includes("Error") ? "bg-red-500" : "bg-green-500"} animate-pulse`}></div>
-                <span className="font-bold text-gray-200 tracking-wide">GenSnap Graph</span>
+            <div className="flex items-center gap-2">
+                <div className="bg-black/40 backdrop-blur px-4 py-2 rounded-full border border-gray-700 flex items-center gap-2">
+                    <div className={`w-2 h-2 rounded-full ${statusMsg.includes("Error") ? "bg-red-500" : "bg-green-500"} animate-pulse`}></div>
+                    <span className="font-bold text-gray-200 tracking-wide hidden sm:block">GenSnap</span>
+                </div>
+                {/* --- SEARCH BAR --- */}
+                <form onSubmit={handleSearch} className="relative group">
+                    <input 
+                        type="text" 
+                        placeholder="Search name..." 
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className="bg-gray-800 text-white pl-8 pr-2 py-2 rounded-full border border-gray-600 focus:border-blue-500 outline-none w-32 focus:w-48 transition-all text-sm"
+                    />
+                    <Search className="absolute left-2.5 top-2.5 text-gray-400" size={14}/>
+                </form>
             </div>
         )}
       </div>
