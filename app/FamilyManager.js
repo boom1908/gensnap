@@ -13,7 +13,7 @@ import ReactFlow, {
 } from "reactflow";
 import "reactflow/dist/style.css";
 import dagre from "dagre";
-import { User, X, Save, Plus, Trash2, ShieldAlert, Edit3, ArrowUp, ArrowDown, Link as LinkIcon, RefreshCcw, Loader2, Info } from "lucide-react";
+import { User, X, Save, Plus, Trash2, ShieldAlert, Edit3, ArrowUp, ArrowDown, Link as LinkIcon, RefreshCcw, Loader2, Globe } from "lucide-react";
 
 // --- LAYOUT ENGINE ---
 const dagreGraph = new dagre.graphlib.Graph();
@@ -37,11 +37,9 @@ const getLayoutedElements = (nodes, edges, savedPositions = {}) => {
   dagre.layout(dagreGraph);
 
   const layoutedNodes = nodes.map((node) => {
-    // If user has manually moved a node, use that saved position
     if (savedPositions[node.id]) {
       return { ...node, position: savedPositions[node.id] };
     }
-    // Otherwise, use auto-layout
     const nodeWithPosition = dagreGraph.node(node.id);
     const x = nodeWithPosition ? nodeWithPosition.x - nodeWidth / 2 : 0;
     const y = nodeWithPosition ? nodeWithPosition.y - nodeHeight / 2 : 0;
@@ -158,7 +156,6 @@ function FamilyManagerInner() {
 
     const newEdges = [];
     members.forEach((m) => {
-      // Primary Parent (Solid Line)
       if (m.parent_id) {
         newEdges.push({ 
             id: `e-${m.parent_id}-${m.id}`, 
@@ -169,7 +166,6 @@ function FamilyManagerInner() {
             style: { stroke: "#4b5563", strokeWidth: 2 } 
         });
       }
-      // Secondary Parent (NOW SOLID LINE TOO)
       if (m.secondary_parent_id) {
         newEdges.push({ 
             id: `e-${m.secondary_parent_id}-${m.id}`, 
@@ -177,7 +173,7 @@ function FamilyManagerInner() {
             target: m.id, 
             type: "smoothstep", 
             markerEnd: { type: MarkerType.ArrowClosed, color: "#4b5563" }, 
-            style: { stroke: "#4b5563", strokeWidth: 2 } // Removed "strokeDasharray"
+            style: { stroke: "#4b5563", strokeWidth: 2 } 
         });
       }
     });
@@ -289,6 +285,19 @@ function FamilyManagerInner() {
     }
     setLoading(false);
   }
+
+  async function handleGoogleLogin() {
+    setLoading(true);
+    const { error } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: {
+            redirectTo: window.location.origin 
+        }
+    });
+    if (error) alert(error.message);
+    setLoading(false);
+  }
+
   async function handleNuke() {
     if (!confirm("⚠️ NUKE ALL DATA?")) return;
     await fetch("/api/nuke", { method: "POST" }); window.location.reload();
@@ -296,7 +305,32 @@ function FamilyManagerInner() {
 
   if (modalMode === "admin") return ( <div className="flex flex-col items-center justify-center min-h-screen bg-red-950 text-white p-4 font-mono"><ShieldAlert size={64} className="text-red-500 mb-4 animate-pulse" /><h1 className="text-4xl font-black mb-8 uppercase tracking-widest text-red-500">System Admin</h1><button onClick={handleNuke} className="bg-red-600 hover:bg-red-500 text-white py-4 px-8 rounded shadow-[0_0_20px_rgba(220,38,38,0.8)] font-bold mb-4">☢️ NUKE DATABASE</button><button onClick={() => { setModalMode("none"); setEmail(""); }} className="text-gray-400 underline">Exit</button></div> );
   
-  if (!session) return ( <div className="flex flex-col items-center justify-center min-h-screen bg-[#0f172a] text-white p-4"><div className="bg-[#1e293b] p-8 rounded-2xl border border-gray-700 w-full max-w-sm shadow-2xl"><h1 className="text-3xl font-bold mb-2 text-center text-blue-400">GenSnap</h1><p className="text-center text-gray-400 text-xs mb-8">Secure Family Database</p><form onSubmit={handleAuth} className="space-y-4"><div><label className="text-xs text-gray-500 font-bold ml-1">EMAIL</label><input className="w-full p-3 bg-[#0f172a] rounded border border-gray-600 focus:border-blue-500 text-white outline-none" type="text" value={email} onChange={e => setEmail(e.target.value)} /></div><div><label className="text-xs text-gray-500 font-bold ml-1">PASSWORD</label><input className="w-full p-3 bg-[#0f172a] rounded border border-gray-600 focus:border-blue-500 text-white outline-none" type="password" value={password} onChange={e => setPassword(e.target.value)} /></div><button className="w-full bg-blue-600 hover:bg-blue-500 p-3 rounded font-bold transition shadow-lg shadow-blue-900/50">{loading ? "Processing..." : (authMode === "login" ? "Sign In" : "Create Account")}</button></form><button onClick={() => setAuthMode(authMode === "login" ? "signup" : "login")} className="w-full mt-6 text-xs text-gray-500 hover:text-white transition">Switch to {authMode === "login" ? "Sign Up" : "Login"}</button></div></div> );
+  if (!session) return ( 
+    <div className="flex flex-col items-center justify-center min-h-screen bg-[#0f172a] text-white p-4">
+        <div className="bg-[#1e293b] p-8 rounded-2xl border border-gray-700 w-full max-w-sm shadow-2xl">
+            <h1 className="text-3xl font-bold mb-2 text-center text-blue-400">GenSnap</h1>
+            <p className="text-center text-gray-400 text-xs mb-8">Secure Family Database</p>
+            
+            <form onSubmit={handleAuth} className="space-y-4">
+                <div><label className="text-xs text-gray-500 font-bold ml-1">EMAIL</label><input className="w-full p-3 bg-[#0f172a] rounded border border-gray-600 focus:border-blue-500 text-white outline-none" type="text" value={email} onChange={e => setEmail(e.target.value)} /></div>
+                <div><label className="text-xs text-gray-500 font-bold ml-1">PASSWORD</label><input className="w-full p-3 bg-[#0f172a] rounded border border-gray-600 focus:border-blue-500 text-white outline-none" type="password" value={password} onChange={e => setPassword(e.target.value)} /></div>
+                <button className="w-full bg-blue-600 hover:bg-blue-500 p-3 rounded font-bold transition shadow-lg shadow-blue-900/50">{loading ? "Processing..." : (authMode === "login" ? "Sign In" : "Create Account")}</button>
+            </form>
+
+            <div className="my-4 flex items-center gap-2">
+                <div className="h-[1px] bg-gray-700 flex-1"></div>
+                <span className="text-xs text-gray-500">OR</span>
+                <div className="h-[1px] bg-gray-700 flex-1"></div>
+            </div>
+
+            <button type="button" onClick={handleGoogleLogin} className="w-full bg-white text-black p-3 rounded font-bold hover:bg-gray-200 transition flex items-center justify-center gap-2">
+                <Globe size={18} /> Sign in with Google
+            </button>
+
+            <button onClick={() => setAuthMode(authMode === "login" ? "signup" : "login")} className="w-full mt-6 text-xs text-gray-500 hover:text-white transition">Switch to {authMode === "login" ? "Sign Up" : "Login"}</button>
+        </div>
+    </div> 
+  );
 
   return (
     <div className="w-screen h-screen bg-[#111827] flex flex-col">
