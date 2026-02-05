@@ -1,47 +1,54 @@
-@import "tailwindcss";
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --foreground-rgb: 255, 255, 255;
+  --background-start-rgb: 17, 24, 39;
+  --background-end-rgb: 17, 24, 39;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  color: rgb(var(--foreground-rgb));
+  background: linear-gradient(
+      to bottom,
+      transparent,
+      rgb(var(--background-end-rgb))
+    )
+    rgb(var(--background-start-rgb));
 }
 
-/* --- REACT FLOW DARK MODE OVERRIDES --- */
+/* --- FORCE DARK MODE CONTROLS --- */
+
+/* 1. The Container Bar */
 .react-flow__controls {
-  background-color: #1f2937 !important; /* Dark Gray Background */
-  border: 1px solid #374151 !important; /* Dark Border */
+  background-color: #1e293b !important; /* Dark Blue */
+  border: 1px solid #334155 !important; /* Border Color */
   box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.5) !important;
+  border-radius: 8px !important;
+  overflow: hidden !important;
 }
 
+/* 2. The Individual Buttons */
 .react-flow__controls-button {
-  border-bottom: 1px solid #374151 !important;
-  fill: white !important; /* White Icons */
+  background-color: #1e293b !important; /* Dark Blue */
+  border-bottom: 1px solid #334155 !important; /* Separator Line */
+  border-radius: 0 !important;
 }
 
+/* 3. The Icons (Plus, Minus, Fit) - Force White */
+.react-flow__controls-button svg {
+  fill: white !important;
+  max-width: 12px !important;
+  max-height: 12px !important;
+}
+
+/* 4. Hover Effect */
 .react-flow__controls-button:hover {
-  background-color: #374151 !important; /* Lighter Gray on Hover */
+  background-color: #334155 !important; /* Lighter Blue on hover */
 }
 
-/* Hide the React Flow Watermark (Optional) */
+/* 5. Hide Watermark */
 .react-flow__attribution {
   display: none !important;
 }
