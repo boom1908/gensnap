@@ -24,3 +24,24 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* --- REACT FLOW DARK MODE OVERRIDES --- */
+.react-flow__controls {
+  background-color: #1f2937 !important; /* Dark Gray Background */
+  border: 1px solid #374151 !important; /* Dark Border */
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.5) !important;
+}
+
+.react-flow__controls-button {
+  border-bottom: 1px solid #374151 !important;
+  fill: white !important; /* White Icons */
+}
+
+.react-flow__controls-button:hover {
+  background-color: #374151 !important; /* Lighter Gray on Hover */
+}
+
+/* Hide the React Flow Watermark (Optional) */
+.react-flow__attribution {
+  display: none !important;
+}
