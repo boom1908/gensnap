@@ -173,21 +173,11 @@ function FamilyManagerInner() {
     setPast(newPast);
     setNodes(previous);
     
-    // Sync restored positions to DB
-    // Note: This mainly syncs positions/data. Deleted nodes might need manual refresh to reappear fully if ID was lost, but upsert handles most cases.
     const upsertData = previous.map(n => ({
-        id: n.id,
-        name: n.data.name,
-        gender: n.data.gender,
-        dob: n.data.dob,
-        is_alive: n.data.is_alive,
-        relation: n.data.relation,
-        photo_url: n.data.photo_url,
-        parent_id: n.data.parent_id,
-        secondary_parent_id: n.data.secondary_parent_id,
-        user_id: session.user.id,
-        position_x: n.position.x,
-        position_y: n.position.y
+        id: n.id, name: n.data.name, gender: n.data.gender, dob: n.data.dob,
+        is_alive: n.data.is_alive, relation: n.data.relation, photo_url: n.data.photo_url,
+        parent_id: n.data.parent_id, secondary_parent_id: n.data.secondary_parent_id,
+        user_id: session.user.id, position_x: n.position.x, position_y: n.position.y
     }));
     if(upsertData.length > 0) await supabase.from("family_members").upsert(upsertData);
   };
@@ -203,18 +193,10 @@ function FamilyManagerInner() {
     setNodes(next);
 
     const upsertData = next.map(n => ({
-        id: n.id,
-        name: n.data.name,
-        gender: n.data.gender,
-        dob: n.data.dob,
-        is_alive: n.data.is_alive,
-        relation: n.data.relation,
-        photo_url: n.data.photo_url,
-        parent_id: n.data.parent_id,
-        secondary_parent_id: n.data.secondary_parent_id,
-        user_id: session.user.id,
-        position_x: n.position.x,
-        position_y: n.position.y
+        id: n.id, name: n.data.name, gender: n.data.gender, dob: n.data.dob,
+        is_alive: n.data.is_alive, relation: n.data.relation, photo_url: n.data.photo_url,
+        parent_id: n.data.parent_id, secondary_parent_id: n.data.secondary_parent_id,
+        user_id: session.user.id, position_x: n.position.x, position_y: n.position.y
     }));
     if(upsertData.length > 0) await supabase.from("family_members").upsert(upsertData);
   };
@@ -381,7 +363,7 @@ function FamilyManagerInner() {
 
   async function handleSave(e) {
     e.preventDefault();
-    takeSnapshot(); // Snapshot before saving
+    takeSnapshot(); 
     setSaving(true);
     setStatusMsg("Saving...");
     const cleanDob = formData.dob === "" ? null : formData.dob;
@@ -412,7 +394,7 @@ function FamilyManagerInner() {
 
   async function handleDelete() {
     if(!confirm("⚠️ Delete this person?")) return;
-    takeSnapshot(); // Snapshot before delete
+    takeSnapshot();
     setSaving(true);
     await supabase.from("family_members").delete().eq("id", formData.id);
     setSaving(false);
@@ -475,15 +457,8 @@ function FamilyManagerInner() {
                     <div className={`w-2 h-2 rounded-full ${statusMsg.includes("Error") ? "bg-red-500" : "bg-green-500"} animate-pulse`}></div>
                     <span className="font-bold text-gray-200 tracking-wide hidden sm:block">GenSnap</span>
                 </div>
-                {/* --- SEARCH BAR --- */}
                 <form onSubmit={handleSearch} className="relative group">
-                    <input 
-                        type="text" 
-                        placeholder="Search name..." 
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        className="bg-gray-800 text-white pl-8 pr-2 py-2 rounded-full border border-gray-600 focus:border-blue-500 outline-none w-32 focus:w-48 transition-all text-sm"
-                    />
+                    <input type="text" placeholder="Search name..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="bg-gray-800 text-white pl-8 pr-2 py-2 rounded-full border border-gray-600 focus:border-blue-500 outline-none w-32 focus:w-48 transition-all text-sm"/>
                     <Search className="absolute left-2.5 top-2.5 text-gray-400" size={14}/>
                 </form>
             </div>
@@ -492,13 +467,9 @@ function FamilyManagerInner() {
       <div className="absolute top-4 right-4 z-10 flex gap-2">
           {!readOnly && (
             <>
-              {/* --- UNDO / REDO --- */}
               <button onClick={handleUndo} disabled={past.length === 0} className="bg-gray-800 hover:bg-gray-700 disabled:opacity-50 text-white p-2 rounded-full border border-gray-600 transition" title="Undo"><Undo size={14} /></button>
               <button onClick={handleRedo} disabled={future.length === 0} className="bg-gray-800 hover:bg-gray-700 disabled:opacity-50 text-white p-2 rounded-full border border-gray-600 transition" title="Redo"><Redo size={14} /></button>
-              
-              <button onClick={handleShare} className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-full border border-blue-500/50 transition text-sm font-bold flex items-center gap-2">
-                  <Share2 size={14} /> Share
-              </button>
+              <button onClick={handleShare} className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-full border border-blue-500/50 transition text-sm font-bold flex items-center gap-2"><Share2 size={14} /> Share</button>
             </>
           )}
           <button onClick={handleDownloadImage} className="bg-green-600 hover:bg-green-500 text-white px-4 py-2 rounded-full border border-green-500/50 transition text-sm font-bold flex items-center gap-2"><Download size={14} /> Save</button>
@@ -514,7 +485,8 @@ function FamilyManagerInner() {
       </div>
       <div className="flex-1 w-full h-full">
         <ReactFlow nodes={nodes} edges={edges} nodeTypes={nodeTypes} onNodesChange={onNodesChange} onEdgesChange={onEdgesChange} onNodeClick={onNodeClick} onNodeDragStart={onNodeDragStart} onNodeDragStop={onNodeDragStop} onMoveEnd={saveView} fitView className="bg-[#111827]">
-          <Controls className="bg-gray-800 border-gray-700 fill-white" />
+          {/* --- NUCLEAR OPTION: FORCE DARK MODE ON CONTROLS --- */}
+          <Controls className="bg-gray-800 border-gray-700 [&>button]:bg-gray-800 [&>button]:border-gray-700 [&>button]:fill-gray-100 [&>button:hover]:bg-gray-700" />
           <Background color="#374151" gap={20} />
           <MiniMap nodeColor={() => "#1f2937"} style={{background: "#111827"}} />
         </ReactFlow>
