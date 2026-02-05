@@ -212,6 +212,15 @@ function FamilyManagerInner() {
 
   return (
     <div className="w-screen h-screen bg-[#111827] flex flex-col">
+      {/* --- SAFE INJECTED STYLES FOR DARK CONTROLS --- */}
+      <style>{`
+        .react-flow__controls { background-color: #1f2937 !important; border: 1px solid #374151 !important; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.5) !important; border-radius: 8px !important; overflow: hidden !important; }
+        .react-flow__controls-button { background-color: #1f2937 !important; border-bottom: 1px solid #374151 !important; border-radius: 0 !important; fill: white !important; }
+        .react-flow__controls-button svg { fill: white !important; }
+        .react-flow__controls-button:hover { background-color: #374151 !important; }
+        .react-flow__attribution { display: none !important; }
+      `}</style>
+      
       <div className="absolute top-4 left-4 z-10 flex gap-4">
         {readOnly && <div className="bg-yellow-500 text-black px-4 py-2 rounded-full font-bold shadow-lg animate-pulse flex items-center gap-2">👀 Guest Mode (Read Only)</div>}
         {!readOnly && (<div className="flex items-center gap-2"><div className="bg-black/40 backdrop-blur px-4 py-2 rounded-full border border-gray-700 flex items-center gap-2"><div className={`w-2 h-2 rounded-full ${statusMsg.includes("Error") ? "bg-red-500" : "bg-green-500"} animate-pulse`}></div><span className="font-bold text-gray-200 tracking-wide hidden sm:block">GenSnap</span></div><form onSubmit={handleSearch} className="relative group"><input type="text" placeholder="Search name..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="bg-gray-800 text-white pl-8 pr-2 py-2 rounded-full border border-gray-600 focus:border-blue-500 outline-none w-32 focus:w-48 transition-all text-sm"/><Search className="absolute left-2.5 top-2.5 text-gray-400" size={14}/></form></div>)}
@@ -224,7 +233,6 @@ function FamilyManagerInner() {
       </div>
       <div className="flex-1 w-full h-full">
         <ReactFlow nodes={nodes} edges={edges} nodeTypes={nodeTypes} onNodesChange={onNodesChange} onEdgesChange={onEdgesChange} onNodeClick={onNodeClick} onNodeDragStart={onNodeDragStart} onNodeDragStop={onNodeDragStop} onMoveEnd={saveView} fitView className="bg-[#111827]">
-          {/* Note: We removed the class override here to be safe. It uses default styles now. */}
           <Controls />
           <Background color="#374151" gap={20} />
           <MiniMap nodeColor={() => "#1f2937"} style={{background: "#111827"}} />
