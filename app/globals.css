@@ -13,18 +13,31 @@ body {
   background: linear-gradient(to bottom, transparent, rgb(var(--background-end-rgb))) rgb(var(--background-start-rgb));
 }
 
-/* Basic Dark Mode for Controls - Simpler version that won't break the layout */
+/* --- DARK MODE CONTROLS (SAFE VERSION) --- */
+/* This forces the white bar to be Dark Blue without breaking the site */
 .react-flow__controls {
-  background-color: #1f2937;
-  border-color: #374151; 
+  background-color: #1f2937 !important;
+  border: 1px solid #374151 !important;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.5) !important;
+  border-radius: 8px !important;
+  overflow: hidden !important;
 }
+
 .react-flow__controls-button {
-  background-color: #1f2937;
-  border-bottom-color: #374151;
+  background-color: #1f2937 !important;
+  border-bottom: 1px solid #374151 !important;
+  fill: white !important;
 }
+
 .react-flow__controls-button svg {
-  fill: white;
+  fill: white !important;
 }
+
 .react-flow__controls-button:hover {
-  background-color: #374151;
+  background-color: #374151 !important;
+}
+
+/* Hide Watermark */
+.react-flow__attribution {
+  display: none !important;
 }
