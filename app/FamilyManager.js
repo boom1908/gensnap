@@ -9,7 +9,9 @@ import ReactFlow, {
   MiniMap,
   MarkerType,
   ReactFlowProvider,
-  useReactFlow
+  useReactFlow,
+  Handle,
+  Position
 } from "reactflow";
 import "reactflow/dist/style.css";
 import dagre from "dagre";
@@ -27,27 +29,76 @@ const GoogleIcon = () => (
   </svg>
 );
 
+// --- CUSTOM NODE COMPONENT (Fixes the Sideways Line Issue) ---
+const FamilyNode = ({ data }) => {
+  function getPreciseAge(dob, isAlive) {
+    if (!dob) return "";
+    const birth = new Date(dob);
+    const today = new Date();
+    let years = today.getFullYear() - birth.getFullYear();
+    let months = today.getMonth() - birth.getMonth();
+    if (months < 0) { years--; months += 12; }
+    return isAlive ? `${years}y` : `Died: ${years}y`;
+  }
+
+  const borderColor = data.gender === "Male" ? "#3b82f6" : "#ec4899";
+
+  return (
+    <div style={{ 
+      background: "#1f2937", 
+      color: "white", 
+      border: `1px solid ${borderColor}`,
+      borderRadius: "8px", 
+      padding: "10px", 
+      width: 180, 
+      fontSize: "12px",
+      boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.5)",
+      position: 'relative'
+    }}>
+      {/* HANDLES: 4 Connection Points */}
+      <Handle type="target" position={Position.Top} style={{ background: '#555' }} />
+      <Handle type="source" position={Position.Bottom} style={{ background: '#555' }} />
+      
+      {/* Side handles for Couples - They use IDs to be targeted specifically */}
+      <Handle type="source" position={Position.Right} id="right" style={{ top: '50%', background: 'transparent', border: 'none' }} />
+      <Handle type="target" position={Position.Left} id="left" style={{ top: '50%', background: 'transparent', border: 'none' }} />
+
+      <div className="flex flex-col items-center gap-2 pointer-events-none">
+        <div className="w-10 h-10 rounded-full overflow-hidden border border-gray-500 bg-gray-800">
+          {data.photo_url ? <img src={data.photo_url} className="w-full h-full object-cover" /> : <User className="p-2 w-full h-full text-gray-400"/>}
+        </div>
+        <div className="text-center">
+          <div className="font-bold text-sm truncate w-36">{data.name}</div>
+          <div className="text-[10px] text-gray-400">{data.relation}</div>
+          <div className="text-[9px] text-gray-500">{getPreciseAge(data.dob, data.is_alive)}</div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const nodeTypes = { familyMember: FamilyNode };
+
 // --- LAYOUT ENGINE ---
 const dagreGraph = new dagre.graphlib.Graph();
 dagreGraph.setDefaultEdgeLabel(() => ({}));
-const nodeWidth = 180;
-const nodeHeight = 100;
+const nodeWidth = 200; // Increased spacing slightly
+const nodeHeight = 120;
 
 const getLayoutedElements = (nodes, edges, savedPositions = {}) => {
   if (nodes.length === 0) return { nodes: [], edges: [] };
-  dagreGraph.setGraph({ rankdir: "TB", ranksep: 100, nodesep: 50 });
+  dagreGraph.setGraph({ rankdir: "TB", ranksep: 100, nodesep: 60 });
+  
   nodes.forEach((node) => { dagreGraph.setNode(node.id, { width: nodeWidth, height: nodeHeight }); });
   
   edges.forEach((edge) => { 
-      // CRITICAL: We DO NOT tell the layout engine about "Couple" edges.
-      // If we did, it would try to put one spouse below the other.
-      // By skipping them here, spouses stay on the same level!
+      // Skip couple lines in layout to keep them on same rank
       if (edge.data && edge.data.isCouple) return;
-
       dagreGraph.setEdge(edge.source, edge.target); 
   });
   
   dagre.layout(dagreGraph);
+  
   const layoutedNodes = nodes.map((node) => {
     if (savedPositions[node.id]) return { ...node, position: savedPositions[node.id] };
     const nodeWithPosition = dagreGraph.node(node.id);
@@ -138,59 +189,62 @@ function FamilyManagerInner() {
         return;
     }
 
+    // --- NODE GENERATION (Using Custom Type) ---
     const newNodes = members.map((m) => ({
       id: m.id,
-      data: { ...m, label: m.name }, 
-      position: { x: 0, y: 0 }, 
-      style: { 
-        background: "#1f2937", color: "white", 
-        border: m.gender === "Male" ? "1px solid #3b82f6" : "1px solid #ec4899",
-        borderRadius: "8px", padding: "10px", width: 180, fontSize: "12px",
-        boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.5)"
-      },
-      label: (
-        <div className="flex flex-col items-center gap-2 pointer-events-none">
-            <div className="w-10 h-10 rounded-full overflow-hidden border border-gray-500 bg-gray-800">
-                {m.photo_url ? <img src={m.photo_url} className="w-full h-full object-cover" /> : <User className="p-2 w-full h-full text-gray-400"/>}
-            </div>
-            <div className="text-center">
-                <div className="font-bold text-sm truncate w-36">{m.name}</div>
-                <div className="text-[10px] text-gray-400">{m.relation}</div>
-                <div className="text-[9px] text-gray-500">{getPreciseAge(m.dob, m.is_alive)}</div>
-            </div>
-        </div>
-      )
+      type: 'familyMember', // Use our custom component
+      data: m, // Pass all data to component
+      position: { x: 0, y: 0 }
     }));
 
     const newEdges = [];
-    const couplePairs = new Set(); // To ensure we only draw the line once per couple
+    const couplePairs = new Set(); 
 
     members.forEach((m) => {
-      // 1. Regular Parent-Child Edges
+      // 1. Regular Parent-Child Edges (Top to Bottom)
       if (m.parent_id) {
-        newEdges.push({ id: `e-${m.parent_id}-${m.id}`, source: m.parent_id, target: m.id, type: "smoothstep", markerEnd: { type: MarkerType.ArrowClosed, color: "#4b5563" }, style: { stroke: "#4b5563", strokeWidth: 2 } });
+        newEdges.push({ 
+            id: `e-${m.parent_id}-${m.id}`, 
+            source: m.parent_id, 
+            target: m.id, 
+            type: "smoothstep", 
+            markerEnd: { type: MarkerType.ArrowClosed, color: "#4b5563" }, 
+            style: { stroke: "#4b5563", strokeWidth: 2 } 
+        });
       }
       if (m.secondary_parent_id) {
-        newEdges.push({ id: `e-${m.secondary_parent_id}-${m.id}`, source: m.secondary_parent_id, target: m.id, type: "smoothstep", markerEnd: { type: MarkerType.ArrowClosed, color: "#4b5563" }, style: { stroke: "#4b5563", strokeWidth: 2 } });
+        newEdges.push({ 
+            id: `e-${m.secondary_parent_id}-${m.id}`, 
+            source: m.secondary_parent_id, 
+            target: m.id, 
+            type: "smoothstep", 
+            markerEnd: { type: MarkerType.ArrowClosed, color: "#4b5563" }, 
+            style: { stroke: "#4b5563", strokeWidth: 2 } 
+        });
       }
 
-      // 2. COUPLE DETECTION (Draw dashed line between parents)
+      // 2. COUPLE DETECTION (Draw SIDEWAYS dashed line)
       if (m.parent_id && m.secondary_parent_id) {
           const p1 = m.parent_id;
           const p2 = m.secondary_parent_id;
-          // Sort IDs so "Dad-Mom" is the same as "Mom-Dad"
           const pairKey = [p1, p2].sort().join("-");
 
           if (!couplePairs.has(pairKey)) {
               couplePairs.add(pairKey);
+              // We decide order based on ID string to be consistent
+              const source = p1 < p2 ? p1 : p2;
+              const target = p1 < p2 ? p2 : p1;
+
               newEdges.push({
                   id: `couple-${pairKey}`,
-                  source: p1,
-                  target: p2,
-                  type: "straight", // Straight line for couples
+                  source: source,
+                  target: target,
+                  sourceHandle: 'right', // Connect from Right side of P1
+                  targetHandle: 'left',  // To Left side of P2
+                  type: "straight", 
                   animated: false,
-                  style: { stroke: "#ec4899", strokeWidth: 2, strokeDasharray: "5,5" }, // PINK DASHED LINE
-                  data: { isCouple: true }, // Tag for Layout Engine
+                  style: { stroke: "#ec4899", strokeWidth: 2, strokeDasharray: "5,5" }, 
+                  data: { isCouple: true },
                   selectable: false
               });
           }
@@ -209,16 +263,6 @@ function FamilyManagerInner() {
     setFormData(node.data); 
     setModalMode("menu");
   }, []);
-
-  function getPreciseAge(dob, isAlive) {
-    if (!dob) return "";
-    const birth = new Date(dob);
-    const today = new Date();
-    let years = today.getFullYear() - birth.getFullYear();
-    let months = today.getMonth() - birth.getMonth();
-    if (months < 0) { years--; months += 12; }
-    return isAlive ? `${years}y` : `Died: ${years}y`;
-  }
 
   // --- NEW: UPLOAD LOGIC ---
   async function handleImageUpload(e) {
@@ -370,7 +414,18 @@ function FamilyManagerInner() {
           <button onClick={() => supabase.auth.signOut()} className="bg-gray-800 hover:bg-gray-700 text-white px-4 py-2 rounded-full border border-gray-600 transition text-sm">Logout</button>
       </div>
       <div className="flex-1 w-full h-full">
-        <ReactFlow nodes={nodes} edges={edges} onNodesChange={onNodesChange} onEdgesChange={onEdgesChange} onNodeClick={onNodeClick} onNodeDragStop={saveNodePosition} onMoveEnd={saveView} fitView className="bg-[#111827]">
+        <ReactFlow 
+            nodes={nodes} 
+            edges={edges} 
+            nodeTypes={nodeTypes} 
+            onNodesChange={onNodesChange} 
+            onEdgesChange={onEdgesChange} 
+            onNodeClick={onNodeClick} 
+            onNodeDragStop={saveNodePosition} 
+            onMoveEnd={saveView} 
+            fitView 
+            className="bg-[#111827]"
+        >
           <Controls className="bg-gray-800 border-gray-700 fill-white" />
           <Background color="#374151" gap={20} />
           <MiniMap nodeColor={() => "#1f2937"} style={{background: "#111827"}} />
