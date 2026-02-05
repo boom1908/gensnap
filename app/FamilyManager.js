@@ -16,7 +16,7 @@ import ReactFlow, {
 import "reactflow/dist/style.css";
 import dagre from "dagre";
 import { toPng } from "html-to-image";
-import { User, X, Save, Plus, Trash2, Edit3, ArrowUp, ArrowDown, Link as LinkIcon, RefreshCcw, Loader2, Upload, Download, Share2, Gift, Search } from "lucide-react";
+import { User, X, Save, Plus, Trash2, Edit3, ArrowUp, ArrowDown, Link as LinkIcon, RefreshCcw, Loader2, Upload, Download, Share2, Gift, Search, Undo, Redo } from "lucide-react";
 
 // --- GOOGLE LOGO ---
 const GoogleIcon = () => (
@@ -114,7 +114,10 @@ function FamilyManagerInner() {
   const [statusMsg, setStatusMsg] = useState("Ready");
   const [readOnly, setReadOnly] = useState(false);
   
-  // Search State
+  // Undo/Redo Stacks
+  const [past, setPast] = useState([]);
+  const [future, setFuture] = useState([]);
+
   const [searchQuery, setSearchQuery] = useState("");
   
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
@@ -152,6 +155,73 @@ function FamilyManagerInner() {
         return () => subscription.unsubscribe();
     }
   }, []);
+
+  // --- HISTORY SNAPSHOT (Call before changes) ---
+  const takeSnapshot = useCallback(() => {
+    if (readOnly) return;
+    setPast((prev) => [...prev, nodes]);
+    setFuture([]); // Clear future on new action
+  }, [nodes, readOnly]);
+
+  // --- UNDO ---
+  const handleUndo = async () => {
+    if (past.length === 0) return;
+    const previous = past[past.length - 1];
+    const newPast = past.slice(0, past.length - 1);
+    
+    setFuture((prev) => [nodes, ...prev]);
+    setPast(newPast);
+    setNodes(previous);
+    
+    // Sync restored positions to DB
+    // Note: This mainly syncs positions/data. Deleted nodes might need manual refresh to reappear fully if ID was lost, but upsert handles most cases.
+    const upsertData = previous.map(n => ({
+        id: n.id,
+        name: n.data.name,
+        gender: n.data.gender,
+        dob: n.data.dob,
+        is_alive: n.data.is_alive,
+        relation: n.data.relation,
+        photo_url: n.data.photo_url,
+        parent_id: n.data.parent_id,
+        secondary_parent_id: n.data.secondary_parent_id,
+        user_id: session.user.id,
+        position_x: n.position.x,
+        position_y: n.position.y
+    }));
+    if(upsertData.length > 0) await supabase.from("family_members").upsert(upsertData);
+  };
+
+  // --- REDO ---
+  const handleRedo = async () => {
+    if (future.length === 0) return;
+    const next = future[0];
+    const newFuture = future.slice(1);
+    
+    setPast((prev) => [...prev, nodes]);
+    setFuture(newFuture);
+    setNodes(next);
+
+    const upsertData = next.map(n => ({
+        id: n.id,
+        name: n.data.name,
+        gender: n.data.gender,
+        dob: n.data.dob,
+        is_alive: n.data.is_alive,
+        relation: n.data.relation,
+        photo_url: n.data.photo_url,
+        parent_id: n.data.parent_id,
+        secondary_parent_id: n.data.secondary_parent_id,
+        user_id: session.user.id,
+        position_x: n.position.x,
+        position_y: n.position.y
+    }));
+    if(upsertData.length > 0) await supabase.from("family_members").upsert(upsertData);
+  };
+
+  const onNodeDragStart = useCallback(() => {
+      takeSnapshot();
+  }, [takeSnapshot]);
 
   const onNodeDragStop = useCallback(async (event, node) => {
       if (readOnly) return;
@@ -192,14 +262,12 @@ function FamilyManagerInner() {
       }).catch((err) => { console.error(err); setStatusMsg("Download Error"); });
   };
 
-  // --- NEW: SEARCH & FLY FUNCTION ---
   const handleSearch = (e) => {
       e.preventDefault();
       if (!searchQuery.trim()) return;
-
       const target = nodes.find(n => n.data.name.toLowerCase().includes(searchQuery.toLowerCase()));
       if (target) {
-          fitView({ nodes: [{ id: target.id }], duration: 1000, padding: 2 }); // Zoom to node with animation
+          fitView({ nodes: [{ id: target.id }], duration: 1000, padding: 2 });
           setStatusMsg(`Found: ${target.data.name}`);
       } else {
           alert("Person not found!");
@@ -313,6 +381,7 @@ function FamilyManagerInner() {
 
   async function handleSave(e) {
     e.preventDefault();
+    takeSnapshot(); // Snapshot before saving
     setSaving(true);
     setStatusMsg("Saving...");
     const cleanDob = formData.dob === "" ? null : formData.dob;
@@ -343,6 +412,7 @@ function FamilyManagerInner() {
 
   async function handleDelete() {
     if(!confirm("⚠️ Delete this person?")) return;
+    takeSnapshot(); // Snapshot before delete
     setSaving(true);
     await supabase.from("family_members").delete().eq("id", formData.id);
     setSaving(false);
@@ -367,6 +437,7 @@ function FamilyManagerInner() {
 
   async function handleResetTree() {
     if (!confirm("⚠️ DANGER: This will delete YOUR ENTIRE FAMILY TREE.\n\nThis cannot be undone. Are you sure?")) return;
+    takeSnapshot();
     setSaving(true);
     setStatusMsg("Deleting...");
     const { error } = await supabase.from("family_members").delete().neq("id", "00000000-0000-0000-0000-000000000000");
@@ -420,9 +491,15 @@ function FamilyManagerInner() {
       </div>
       <div className="absolute top-4 right-4 z-10 flex gap-2">
           {!readOnly && (
-            <button onClick={handleShare} className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-full border border-blue-500/50 transition text-sm font-bold flex items-center gap-2">
-                <Share2 size={14} /> Share
-            </button>
+            <>
+              {/* --- UNDO / REDO --- */}
+              <button onClick={handleUndo} disabled={past.length === 0} className="bg-gray-800 hover:bg-gray-700 disabled:opacity-50 text-white p-2 rounded-full border border-gray-600 transition" title="Undo"><Undo size={14} /></button>
+              <button onClick={handleRedo} disabled={future.length === 0} className="bg-gray-800 hover:bg-gray-700 disabled:opacity-50 text-white p-2 rounded-full border border-gray-600 transition" title="Redo"><Redo size={14} /></button>
+              
+              <button onClick={handleShare} className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-full border border-blue-500/50 transition text-sm font-bold flex items-center gap-2">
+                  <Share2 size={14} /> Share
+              </button>
+            </>
           )}
           <button onClick={handleDownloadImage} className="bg-green-600 hover:bg-green-500 text-white px-4 py-2 rounded-full border border-green-500/50 transition text-sm font-bold flex items-center gap-2"><Download size={14} /> Save</button>
           {!readOnly && (
@@ -436,7 +513,7 @@ function FamilyManagerInner() {
           )}
       </div>
       <div className="flex-1 w-full h-full">
-        <ReactFlow nodes={nodes} edges={edges} nodeTypes={nodeTypes} onNodesChange={onNodesChange} onEdgesChange={onEdgesChange} onNodeClick={onNodeClick} onNodeDragStop={onNodeDragStop} onMoveEnd={saveView} fitView className="bg-[#111827]">
+        <ReactFlow nodes={nodes} edges={edges} nodeTypes={nodeTypes} onNodesChange={onNodesChange} onEdgesChange={onEdgesChange} onNodeClick={onNodeClick} onNodeDragStart={onNodeDragStart} onNodeDragStop={onNodeDragStop} onMoveEnd={saveView} fitView className="bg-[#111827]">
           <Controls className="bg-gray-800 border-gray-700 fill-white" />
           <Background color="#374151" gap={20} />
           <MiniMap nodeColor={() => "#1f2937"} style={{background: "#111827"}} />
