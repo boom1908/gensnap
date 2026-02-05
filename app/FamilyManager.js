@@ -18,7 +18,7 @@ import dagre from "dagre";
 import { toPng } from "html-to-image";
 import { User, X, Save, Plus, Trash2, Edit3, ArrowUp, ArrowDown, Link as LinkIcon, RefreshCcw, Loader2, Upload, Download } from "lucide-react";
 
-// --- GOOGLE LOGO COMPONENT ---
+// --- GOOGLE LOGO ---
 const GoogleIcon = () => (
   <svg viewBox="0 0 24 24" width="20" height="20" xmlns="http://www.w3.org/2000/svg">
     <g transform="matrix(1, 0, 0, 1, 27.009001, -39.238998)">
@@ -30,7 +30,7 @@ const GoogleIcon = () => (
   </svg>
 );
 
-// --- CUSTOM NODE COMPONENT (Fixes the Sideways Line Issue) ---
+// --- CUSTOM NODE ---
 const FamilyNode = ({ data }) => {
   function getPreciseAge(dob, isAlive) {
     if (!dob) return "";
@@ -41,26 +41,13 @@ const FamilyNode = ({ data }) => {
     if (months < 0) { years--; months += 12; }
     return isAlive ? `${years}y` : `Died: ${years}y`;
   }
-
   const borderColor = data.gender === "Male" ? "#3b82f6" : "#ec4899";
-
   return (
-    <div style={{ 
-      background: "#1f2937", 
-      color: "white", 
-      border: `1px solid ${borderColor}`,
-      borderRadius: "8px", 
-      padding: "10px", 
-      width: 180, 
-      fontSize: "12px",
-      boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.5)",
-      position: 'relative'
-    }}>
+    <div style={{ background: "#1f2937", color: "white", border: `1px solid ${borderColor}`, borderRadius: "8px", padding: "10px", width: 180, fontSize: "12px", boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.5)", position: 'relative' }}>
       <Handle type="target" position={Position.Top} style={{ background: '#555' }} />
       <Handle type="source" position={Position.Bottom} style={{ background: '#555' }} />
       <Handle type="source" position={Position.Right} id="right" style={{ top: '50%', background: 'transparent', border: 'none' }} />
       <Handle type="target" position={Position.Left} id="left" style={{ top: '50%', background: 'transparent', border: 'none' }} />
-
       <div className="flex flex-col items-center gap-2 pointer-events-none">
         <div className="w-10 h-10 rounded-full overflow-hidden border border-gray-500 bg-gray-800">
           {data.photo_url ? <img src={data.photo_url} className="w-full h-full object-cover" /> : <User className="p-2 w-full h-full text-gray-400"/>}
@@ -83,20 +70,30 @@ dagreGraph.setDefaultEdgeLabel(() => ({}));
 const nodeWidth = 200;
 const nodeHeight = 120;
 
-const getLayoutedElements = (nodes, edges, savedPositions = {}) => {
+// Now layout only runs if DB positions are missing
+const getLayoutedElements = (nodes, edges) => {
   if (nodes.length === 0) return { nodes: [], edges: [] };
+  
+  // 1. Calculate Dagre positions (The "Auto" Plan)
   dagreGraph.setGraph({ rankdir: "TB", ranksep: 100, nodesep: 60 });
   nodes.forEach((node) => { dagreGraph.setNode(node.id, { width: nodeWidth, height: nodeHeight }); });
   edges.forEach((edge) => { if (edge.data && edge.data.isCouple) return; dagreGraph.setEdge(edge.source, edge.target); });
   dagre.layout(dagreGraph);
   
+  // 2. Decide: Use DB position OR Auto position
   const layoutedNodes = nodes.map((node) => {
-    if (savedPositions[node.id]) return { ...node, position: savedPositions[node.id] };
+    // If the DB has a position (it's not null/0), USE IT.
+    if (node.data.position_x != null && node.data.position_y != null) {
+        return { ...node, position: { x: node.data.position_x, y: node.data.position_y } };
+    }
+    
+    // Otherwise, use the Auto-Layout position
     const nodeWithPosition = dagreGraph.node(node.id);
     const x = nodeWithPosition ? nodeWithPosition.x - nodeWidth / 2 : 0;
     const y = nodeWithPosition ? nodeWithPosition.y - nodeHeight / 2 : 0;
     return { ...node, position: { x, y } };
   });
+
   return { nodes: layoutedNodes, edges };
 };
 
@@ -136,10 +133,16 @@ function FamilyManagerInner() {
     return () => subscription.unsubscribe();
   }, []);
 
-  const saveNodePosition = useCallback((event, node) => {
-      const saved = JSON.parse(localStorage.getItem("gensnap-positions") || "{}");
-      saved[node.id] = node.position;
-      localStorage.setItem("gensnap-positions", JSON.stringify(saved));
+  // --- SAVE TO DATABASE ON DRAG STOP ---
+  const onNodeDragStop = useCallback(async (event, node) => {
+      // Optimistic Update (Update UI instantly)
+      // Note: ReactFlow handles local UI update automatically.
+      
+      // Save to DB
+      await supabase.from("family_members").update({ 
+          position_x: node.position.x, 
+          position_y: node.position.y 
+      }).eq("id", node.id);
   }, []);
 
   const saveView = useCallback(() => {
@@ -152,40 +155,32 @@ function FamilyManagerInner() {
       if (savedView) setViewport(savedView);
   };
 
-  const resetLayout = () => {
+  const resetLayout = async () => {
       if(confirm("Reset all node positions to default?")) {
-          localStorage.removeItem("gensnap-positions");
+          // Clear DB positions
+          await supabase.from("family_members").update({ position_x: null, position_y: null }).neq("id", "00000000-0000-0000-0000-000000000000");
           fetchAndDrawGraph();
       }
   };
 
-  // --- NEW: DOWNLOAD IMAGE FUNCTION ---
   const handleDownloadImage = () => {
       const flowElement = document.querySelector(".react-flow");
       if (!flowElement) return;
-
       setStatusMsg("Generating Image...");
-      
       toPng(flowElement, {
           backgroundColor: "#111827",
           filter: (node) => {
-              // Don't take a picture of the buttons or minimap
               if (node.classList?.contains("react-flow__controls")) return false;
               if (node.classList?.contains("react-flow__minimap")) return false;
               return true;
           }
-      })
-      .then((dataUrl) => {
+      }).then((dataUrl) => {
           const a = document.createElement("a");
           a.setAttribute("download", "gensnap-tree.png");
           a.setAttribute("href", dataUrl);
           a.click();
           setStatusMsg("Image Downloaded!");
-      })
-      .catch((err) => {
-          console.error(err);
-          setStatusMsg("Download Error");
-      });
+      }).catch((err) => { console.error(err); setStatusMsg("Download Error"); });
   };
 
   async function fetchAndDrawGraph() {
@@ -213,7 +208,8 @@ function FamilyManagerInner() {
       id: m.id,
       type: 'familyMember',
       data: m,
-      position: { x: 0, y: 0 }
+      // We pass the position here so layout engine sees it
+      position: { x: m.position_x || 0, y: m.position_y || 0 }
     }));
 
     const newEdges = [];
@@ -221,54 +217,25 @@ function FamilyManagerInner() {
 
     members.forEach((m) => {
       if (m.parent_id) {
-        newEdges.push({ 
-            id: `e-${m.parent_id}-${m.id}`, 
-            source: m.parent_id, 
-            target: m.id, 
-            type: "smoothstep", 
-            markerEnd: { type: MarkerType.ArrowClosed, color: "#4b5563" }, 
-            style: { stroke: "#4b5563", strokeWidth: 2 } 
-        });
+        newEdges.push({ id: `e-${m.parent_id}-${m.id}`, source: m.parent_id, target: m.id, type: "smoothstep", markerEnd: { type: MarkerType.ArrowClosed, color: "#4b5563" }, style: { stroke: "#4b5563", strokeWidth: 2 } });
       }
       if (m.secondary_parent_id) {
-        newEdges.push({ 
-            id: `e-${m.secondary_parent_id}-${m.id}`, 
-            source: m.secondary_parent_id, 
-            target: m.id, 
-            type: "smoothstep", 
-            markerEnd: { type: MarkerType.ArrowClosed, color: "#4b5563" }, 
-            style: { stroke: "#4b5563", strokeWidth: 2 } 
-        });
+        newEdges.push({ id: `e-${m.secondary_parent_id}-${m.id}`, source: m.secondary_parent_id, target: m.id, type: "smoothstep", markerEnd: { type: MarkerType.ArrowClosed, color: "#4b5563" }, style: { stroke: "#4b5563", strokeWidth: 2 } });
       }
-
       if (m.parent_id && m.secondary_parent_id) {
           const p1 = m.parent_id;
           const p2 = m.secondary_parent_id;
           const pairKey = [p1, p2].sort().join("-");
-
           if (!couplePairs.has(pairKey)) {
               couplePairs.add(pairKey);
               const source = p1 < p2 ? p1 : p2;
               const target = p1 < p2 ? p2 : p1;
-
-              newEdges.push({
-                  id: `couple-${pairKey}`,
-                  source: source,
-                  target: target,
-                  sourceHandle: 'right', 
-                  targetHandle: 'left',  
-                  type: "straight", 
-                  animated: false,
-                  style: { stroke: "#ec4899", strokeWidth: 2, strokeDasharray: "5,5" }, 
-                  data: { isCouple: true },
-                  selectable: false
-              });
+              newEdges.push({ id: `couple-${pairKey}`, source: source, target: target, sourceHandle: 'right', targetHandle: 'left', type: "straight", animated: false, style: { stroke: "#ec4899", strokeWidth: 2, strokeDasharray: "5,5" }, data: { isCouple: true }, selectable: false });
           }
       }
     });
 
-    const savedPositions = JSON.parse(localStorage.getItem("gensnap-positions") || "{}");
-    const { nodes: layoutedNodes, edges: layoutedEdges } = getLayoutedElements(newNodes, newEdges, savedPositions);
+    const { nodes: layoutedNodes, edges: layoutedEdges } = getLayoutedElements(newNodes, newEdges);
     setNodes(layoutedNodes);
     setEdges(layoutedEdges);
     setLoading(false);
@@ -287,16 +254,12 @@ function FamilyManagerInner() {
     const fileExt = file.name.split(".").pop();
     const fileName = `${Date.now()}.${fileExt}`;
     const filePath = `${session.user.id}/${fileName}`; 
-
     try {
         const { error: uploadError } = await supabase.storage.from("avatars").upload(filePath, file);
         if (uploadError) throw uploadError;
-        
         const { data } = supabase.storage.from("avatars").getPublicUrl(filePath);
         setFormData({ ...formData, photo_url: data.publicUrl });
-    } catch (err) {
-        alert("Upload failed: " + err.message);
-    }
+    } catch (err) { alert("Upload failed: " + err.message); }
     setUploading(false);
   }
 
@@ -304,7 +267,6 @@ function FamilyManagerInner() {
     e.preventDefault();
     setSaving(true);
     setStatusMsg("Saving...");
-
     const cleanDob = formData.dob === "" ? null : formData.dob;
     const payload = { 
       name: formData.name, gender: formData.gender, dob: cleanDob, 
@@ -313,7 +275,6 @@ function FamilyManagerInner() {
       secondary_parent_id: formData.secondary_parent_id || null, 
       user_id: session.user.id 
     };
-
     try {
         let error = null;
         if (modalMode === "me") {
@@ -337,20 +298,9 @@ function FamilyManagerInner() {
                 }
             }
         }
-
-        if (error) {
-            console.error(error);
-            alert("Database Error: " + error.message);
-            setStatusMsg("Error: " + error.message);
-        } else {
-            setStatusMsg("Saved!");
-            setModalMode("none");
-            setTimeout(() => { fetchAndDrawGraph().then(() => { if (modalMode === "me") { setTimeout(() => fitView(), 200); } }); }, 500);
-        }
-    } catch (err) {
-        alert("Unexpected Error: " + err.message);
-        setStatusMsg("Critical Error: " + err.message);
-    }
+        if (error) { console.error(error); alert("Database Error: " + error.message); setStatusMsg("Error: " + error.message); } 
+        else { setStatusMsg("Saved!"); setModalMode("none"); setTimeout(() => { fetchAndDrawGraph().then(() => { if (modalMode === "me") { setTimeout(() => fitView(), 200); } }); }, 500); }
+    } catch (err) { alert("Unexpected Error: " + err.message); setStatusMsg("Critical Error: " + err.message); }
     setSaving(false);
   }
 
@@ -366,22 +316,14 @@ function FamilyManagerInner() {
   async function handleAuth(e) {
     e.preventDefault();
     setLoading(true);
-    if (authMode === "signup") {
-        const { error } = await supabase.auth.signUp({ email, password });
-        if (error) alert(error.message);
-    } else {
-        const { error } = await supabase.auth.signInWithPassword({ email, password });
-        if (error) alert(error.message);
-    }
+    if (authMode === "signup") { const { error } = await supabase.auth.signUp({ email, password }); if (error) alert(error.message); } 
+    else { const { error } = await supabase.auth.signInWithPassword({ email, password }); if (error) alert(error.message); }
     setLoading(false);
   }
 
   async function handleGoogleLogin() {
     setLoading(true);
-    const { error } = await supabase.auth.signInWithOAuth({
-        provider: "google",
-        options: { redirectTo: window.location.origin }
-    });
+    const { error } = await supabase.auth.signInWithOAuth({ provider: "google", options: { redirectTo: window.location.origin } });
     if (error) alert(error.message);
     setLoading(false);
   }
@@ -425,81 +367,33 @@ function FamilyManagerInner() {
         <button onClick={resetLayout} className="bg-gray-800 hover:bg-gray-700 text-white p-2 rounded-full border border-gray-600 transition" title="Reset Layout"><RefreshCcw size={14} /></button>
       </div>
       <div className="absolute top-4 right-4 z-10 flex gap-2">
-          {/* --- NEW DOWNLOAD BUTTON --- */}
-          <button onClick={handleDownloadImage} className="bg-green-600 hover:bg-green-500 text-white px-4 py-2 rounded-full border border-green-500/50 transition text-sm font-bold flex items-center gap-2">
-            <Download size={14} /> Save Image
-          </button>
-
+          <button onClick={handleDownloadImage} className="bg-green-600 hover:bg-green-500 text-white px-4 py-2 rounded-full border border-green-500/50 transition text-sm font-bold flex items-center gap-2"><Download size={14} /> Save Image</button>
           <button onClick={handleResetTree} className="bg-red-500/10 hover:bg-red-500 text-red-500 hover:text-white px-4 py-2 rounded-full border border-red-500/50 transition text-sm font-bold">Reset Tree</button>
           <button onClick={() => supabase.auth.signOut()} className="bg-gray-800 hover:bg-gray-700 text-white px-4 py-2 rounded-full border border-gray-600 transition text-sm">Logout</button>
       </div>
       <div className="flex-1 w-full h-full">
-        <ReactFlow 
-            nodes={nodes} 
-            edges={edges} 
-            nodeTypes={nodeTypes} 
-            onNodesChange={onNodesChange} 
-            onEdgesChange={onEdgesChange} 
-            onNodeClick={onNodeClick} 
-            onNodeDragStop={saveNodePosition} 
-            onMoveEnd={saveView} 
-            fitView 
-            className="bg-[#111827]"
-        >
+        <ReactFlow nodes={nodes} edges={edges} nodeTypes={nodeTypes} onNodesChange={onNodesChange} onEdgesChange={onEdgesChange} onNodeClick={onNodeClick} onNodeDragStop={onNodeDragStop} onMoveEnd={saveView} fitView className="bg-[#111827]">
           <Controls className="bg-gray-800 border-gray-700 fill-white" />
           <Background color="#374151" gap={20} />
           <MiniMap nodeColor={() => "#1f2937"} style={{background: "#111827"}} />
         </ReactFlow>
       </div>
       <div className="bg-blue-900/80 text-white text-xs p-1 text-center font-mono">STATUS: {statusMsg}</div>
-
       {modalMode !== "none" && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-[#1e293b] rounded-2xl border border-gray-700 shadow-2xl w-full max-w-md overflow-hidden relative">
             <div className="bg-[#0f172a] p-4 border-b border-gray-700 flex justify-between items-center"><h2 className="font-bold text-lg text-white">{modalMode === "me" ? "Start Tree" : modalMode === "menu" ? targetNode?.data?.name : modalMode === "add" ? "Add Relative" : "Edit Profile"}</h2>{modalMode !== "me" && <button onClick={() => setModalMode("none")}><X className="text-gray-400 hover:text-white" /></button>}</div>
-            {modalMode === "menu" && (
-                <div className="p-8 grid grid-cols-2 gap-4">
-                    <button onClick={() => { setFormData({ name: "", gender: "Male", dob: "", is_alive: true, relation: "", photo_url: "" }); setPlacement("child"); setModalMode("add"); }} className="bg-blue-600 hover:bg-blue-500 h-32 rounded-xl flex flex-col items-center justify-center gap-2 text-white transition hover:scale-105 border border-blue-400"><Plus size={32} /><span className="font-bold">Add Relative</span></button>
-                    <button onClick={() => setModalMode("edit")} className="bg-gray-700 hover:bg-gray-600 h-32 rounded-xl flex flex-col items-center justify-center gap-2 text-white transition hover:scale-105 border border-gray-500"><Edit3 size={32} /><span className="font-bold">Edit Person</span></button>
-                </div>
-            )}
+            {modalMode === "menu" && (<div className="p-8 grid grid-cols-2 gap-4"><button onClick={() => { setFormData({ name: "", gender: "Male", dob: "", is_alive: true, relation: "", photo_url: "" }); setPlacement("child"); setModalMode("add"); }} className="bg-blue-600 hover:bg-blue-500 h-32 rounded-xl flex flex-col items-center justify-center gap-2 text-white transition hover:scale-105 border border-blue-400"><Plus size={32} /><span className="font-bold">Add Relative</span></button><button onClick={() => setModalMode("edit")} className="bg-gray-700 hover:bg-gray-600 h-32 rounded-xl flex flex-col items-center justify-center gap-2 text-white transition hover:scale-105 border border-gray-500"><Edit3 size={32} /><span className="font-bold">Edit Person</span></button></div>)}
             {(modalMode === "edit" || modalMode === "add" || modalMode === "me") && (
             <form onSubmit={handleSave} className="p-6 space-y-4">
-              {modalMode === "add" && (
-                  <div className="bg-gray-800 p-3 rounded-lg border border-gray-600 mb-4 grid grid-cols-2 gap-2">
-                    <button type="button" onClick={() => setPlacement("parent")} className={`p-2 rounded text-[10px] font-bold flex items-center justify-center gap-1 ${placement === "parent" ? "bg-blue-500 text-white" : "bg-gray-700 text-gray-400"}`}><ArrowUp size={14}/> Parent (Above)</button>
-                    <button type="button" onClick={() => setPlacement("child")} className={`p-2 rounded text-[10px] font-bold flex items-center justify-center gap-1 ${placement === "child" ? "bg-blue-500 text-white" : "bg-gray-700 text-gray-400"}`}><ArrowDown size={14}/> Child (Below)</button>
-                  </div>
-              )}
-              {modalMode === "edit" && membersList.length > 1 && (
-                <div className="bg-gray-800 p-3 rounded-lg border border-gray-600">
-                    <label className="text-[10px] font-bold text-green-400 uppercase tracking-wider mb-1 block flex items-center gap-2"><LinkIcon size={12}/> Link Second Parent (Normal Line)</label>
-                    <select className="w-full p-2 bg-[#0f172a] border border-gray-700 rounded text-white text-sm outline-none" value={formData.secondary_parent_id || ""} onChange={e => setFormData({...formData, secondary_parent_id: e.target.value === "" ? null : e.target.value})}>
-                        <option value="">-- None --</option>
-                        {membersList.filter(m => m.id !== formData.id).map(m => ( <option key={m.id} value={m.id}>{m.name}</option> ))}
-                    </select>
-                </div>
-              )}
-              
-              <div className="flex items-center gap-4 bg-[#0f172a] p-3 rounded-lg border border-gray-700">
-                  <div className="w-12 h-12 bg-gray-700 rounded-full overflow-hidden flex items-center justify-center border border-gray-500 relative group">
-                      {formData.photo_url ? <img src={formData.photo_url} className="w-full h-full object-cover" /> : <User className="text-gray-400" />}
-                      {uploading && <div className="absolute inset-0 bg-black/50 flex items-center justify-center"><Loader2 className="animate-spin text-white" size={16}/></div>}
-                  </div>
-                  <div className="flex-1">
-                      <label className="cursor-pointer flex items-center gap-2 bg-gray-800 hover:bg-gray-700 text-white text-xs px-3 py-2 rounded border border-gray-600 transition w-fit">
-                          <Upload size={14}/> {uploading ? "Uploading..." : "Upload Photo"}
-                          <input type="file" className="hidden" accept="image/*" onChange={handleImageUpload} disabled={uploading}/>
-                      </label>
-                  </div>
-              </div>
-
+              {modalMode === "add" && (<div className="bg-gray-800 p-3 rounded-lg border border-gray-600 mb-4 grid grid-cols-2 gap-2"><button type="button" onClick={() => setPlacement("parent")} className={`p-2 rounded text-[10px] font-bold flex items-center justify-center gap-1 ${placement === "parent" ? "bg-blue-500 text-white" : "bg-gray-700 text-gray-400"}`}><ArrowUp size={14}/> Parent (Above)</button><button type="button" onClick={() => setPlacement("child")} className={`p-2 rounded text-[10px] font-bold flex items-center justify-center gap-1 ${placement === "child" ? "bg-blue-500 text-white" : "bg-gray-700 text-gray-400"}`}><ArrowDown size={14}/> Child (Below)</button></div>)}
+              {modalMode === "edit" && membersList.length > 1 && (<div className="bg-gray-800 p-3 rounded-lg border border-gray-600"><label className="text-[10px] font-bold text-green-400 uppercase tracking-wider mb-1 block flex items-center gap-2"><LinkIcon size={12}/> Link Second Parent (Normal Line)</label><select className="w-full p-2 bg-[#0f172a] border border-gray-700 rounded text-white text-sm outline-none" value={formData.secondary_parent_id || ""} onChange={e => setFormData({...formData, secondary_parent_id: e.target.value === "" ? null : e.target.value})}><option value="">-- None --</option>{membersList.filter(m => m.id !== formData.id).map(m => ( <option key={m.id} value={m.id}>{m.name}</option> ))}</select></div>)}
+              <div className="flex items-center gap-4 bg-[#0f172a] p-3 rounded-lg border border-gray-700"><div className="w-12 h-12 bg-gray-700 rounded-full overflow-hidden flex items-center justify-center border border-gray-500 relative group">{formData.photo_url ? <img src={formData.photo_url} className="w-full h-full object-cover" /> : <User className="text-gray-400" />}{uploading && <div className="absolute inset-0 bg-black/50 flex items-center justify-center"><Loader2 className="animate-spin text-white" size={16}/></div>}</div><div className="flex-1"><label className="cursor-pointer flex items-center gap-2 bg-gray-800 hover:bg-gray-700 text-white text-xs px-3 py-2 rounded border border-gray-600 transition w-fit"><Upload size={14}/> {uploading ? "Uploading..." : "Upload Photo"}<input type="file" className="hidden" accept="image/*" onChange={handleImageUpload} disabled={uploading}/></label></div></div>
               <div className="grid grid-cols-2 gap-4"><div><label className="text-[10px] text-gray-500 font-bold">NAME</label><input className="w-full p-2 bg-[#0f172a] border border-gray-700 rounded text-white" value={formData.name || ""} onChange={e => setFormData({...formData, name: e.target.value})} required /></div><div><label className="text-[10px] text-gray-500 font-bold">RELATION</label><input className="w-full p-2 bg-[#0f172a] border border-gray-700 rounded text-white" value={formData.relation || ""} onChange={e => setFormData({...formData, relation: e.target.value})} /></div></div>
               <div className="grid grid-cols-2 gap-4"><div><label className="text-[10px] text-gray-500 font-bold">GENDER</label><select className="w-full p-2 bg-[#0f172a] border border-gray-700 rounded text-white" value={formData.gender || "Male"} onChange={e => setFormData({...formData, gender: e.target.value})}><option>Male</option><option>Female</option></select></div><div><label className="text-[10px] text-gray-500 font-bold">DOB</label><input type="date" className="w-full p-2 bg-[#0f172a] border border-gray-700 rounded text-white" value={formData.dob || ""} onChange={e => setFormData({...formData, dob: e.target.value})} /></div></div>
               <button disabled={saving} className="w-full bg-blue-600 hover:bg-blue-500 disabled:bg-blue-800 text-white py-3 rounded-lg font-bold flex justify-center items-center gap-2">{saving ? <Loader2 className="animate-spin" size={18}/> : <Save size={18}/>} {saving ? "Saving..." : "Save Changes"}</button>
               {modalMode === "edit" && <button type="button" onClick={handleDelete} className="w-full text-red-400 text-sm"><Trash2 size={14} className="inline mr-1"/> Delete</button>}
-            </form>
-            )}
+            </form>)}
           </div>
         </div>
       )}
