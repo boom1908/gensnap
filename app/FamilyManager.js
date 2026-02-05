@@ -224,7 +224,8 @@ function FamilyManagerInner() {
       </div>
       <div className="flex-1 w-full h-full">
         <ReactFlow nodes={nodes} edges={edges} nodeTypes={nodeTypes} onNodesChange={onNodesChange} onEdgesChange={onEdgesChange} onNodeClick={onNodeClick} onNodeDragStart={onNodeDragStart} onNodeDragStop={onNodeDragStop} onMoveEnd={saveView} fitView className="bg-[#111827]">
-          <Controls className="react-flow__controls" />
+          {/* Note: We removed the class override here to be safe. It uses default styles now. */}
+          <Controls />
           <Background color="#374151" gap={20} />
           <MiniMap nodeColor={() => "#1f2937"} style={{background: "#111827"}} />
         </ReactFlow>
