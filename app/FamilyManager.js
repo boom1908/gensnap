@@ -15,7 +15,8 @@ import ReactFlow, {
 } from "reactflow";
 import "reactflow/dist/style.css";
 import dagre from "dagre";
-import { User, X, Save, Plus, Trash2, Edit3, ArrowUp, ArrowDown, Link as LinkIcon, RefreshCcw, Loader2, Upload } from "lucide-react";
+import { toPng } from "html-to-image";
+import { User, X, Save, Plus, Trash2, Edit3, ArrowUp, ArrowDown, Link as LinkIcon, RefreshCcw, Loader2, Upload, Download } from "lucide-react";
 
 // --- GOOGLE LOGO COMPONENT ---
 const GoogleIcon = () => (
@@ -55,11 +56,8 @@ const FamilyNode = ({ data }) => {
       boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.5)",
       position: 'relative'
     }}>
-      {/* HANDLES: 4 Connection Points */}
       <Handle type="target" position={Position.Top} style={{ background: '#555' }} />
       <Handle type="source" position={Position.Bottom} style={{ background: '#555' }} />
-      
-      {/* Side handles for Couples - They use IDs to be targeted specifically */}
       <Handle type="source" position={Position.Right} id="right" style={{ top: '50%', background: 'transparent', border: 'none' }} />
       <Handle type="target" position={Position.Left} id="left" style={{ top: '50%', background: 'transparent', border: 'none' }} />
 
@@ -82,21 +80,14 @@ const nodeTypes = { familyMember: FamilyNode };
 // --- LAYOUT ENGINE ---
 const dagreGraph = new dagre.graphlib.Graph();
 dagreGraph.setDefaultEdgeLabel(() => ({}));
-const nodeWidth = 200; // Increased spacing slightly
+const nodeWidth = 200;
 const nodeHeight = 120;
 
 const getLayoutedElements = (nodes, edges, savedPositions = {}) => {
   if (nodes.length === 0) return { nodes: [], edges: [] };
   dagreGraph.setGraph({ rankdir: "TB", ranksep: 100, nodesep: 60 });
-  
   nodes.forEach((node) => { dagreGraph.setNode(node.id, { width: nodeWidth, height: nodeHeight }); });
-  
-  edges.forEach((edge) => { 
-      // Skip couple lines in layout to keep them on same rank
-      if (edge.data && edge.data.isCouple) return;
-      dagreGraph.setEdge(edge.source, edge.target); 
-  });
-  
+  edges.forEach((edge) => { if (edge.data && edge.data.isCouple) return; dagreGraph.setEdge(edge.source, edge.target); });
   dagre.layout(dagreGraph);
   
   const layoutedNodes = nodes.map((node) => {
@@ -168,6 +159,35 @@ function FamilyManagerInner() {
       }
   };
 
+  // --- NEW: DOWNLOAD IMAGE FUNCTION ---
+  const handleDownloadImage = () => {
+      const flowElement = document.querySelector(".react-flow");
+      if (!flowElement) return;
+
+      setStatusMsg("Generating Image...");
+      
+      toPng(flowElement, {
+          backgroundColor: "#111827",
+          filter: (node) => {
+              // Don't take a picture of the buttons or minimap
+              if (node.classList?.contains("react-flow__controls")) return false;
+              if (node.classList?.contains("react-flow__minimap")) return false;
+              return true;
+          }
+      })
+      .then((dataUrl) => {
+          const a = document.createElement("a");
+          a.setAttribute("download", "gensnap-tree.png");
+          a.setAttribute("href", dataUrl);
+          a.click();
+          setStatusMsg("Image Downloaded!");
+      })
+      .catch((err) => {
+          console.error(err);
+          setStatusMsg("Download Error");
+      });
+  };
+
   async function fetchAndDrawGraph() {
     setStatusMsg("Syncing...");
     const { data: members, error } = await supabase.from("family_members").select("*").order("dob");
@@ -189,11 +209,10 @@ function FamilyManagerInner() {
         return;
     }
 
-    // --- NODE GENERATION (Using Custom Type) ---
     const newNodes = members.map((m) => ({
       id: m.id,
-      type: 'familyMember', // Use our custom component
-      data: m, // Pass all data to component
+      type: 'familyMember',
+      data: m,
       position: { x: 0, y: 0 }
     }));
 
@@ -201,7 +220,6 @@ function FamilyManagerInner() {
     const couplePairs = new Set(); 
 
     members.forEach((m) => {
-      // 1. Regular Parent-Child Edges (Top to Bottom)
       if (m.parent_id) {
         newEdges.push({ 
             id: `e-${m.parent_id}-${m.id}`, 
@@ -223,7 +241,6 @@ function FamilyManagerInner() {
         });
       }
 
-      // 2. COUPLE DETECTION (Draw SIDEWAYS dashed line)
       if (m.parent_id && m.secondary_parent_id) {
           const p1 = m.parent_id;
           const p2 = m.secondary_parent_id;
@@ -231,7 +248,6 @@ function FamilyManagerInner() {
 
           if (!couplePairs.has(pairKey)) {
               couplePairs.add(pairKey);
-              // We decide order based on ID string to be consistent
               const source = p1 < p2 ? p1 : p2;
               const target = p1 < p2 ? p2 : p1;
 
@@ -239,8 +255,8 @@ function FamilyManagerInner() {
                   id: `couple-${pairKey}`,
                   source: source,
                   target: target,
-                  sourceHandle: 'right', // Connect from Right side of P1
-                  targetHandle: 'left',  // To Left side of P2
+                  sourceHandle: 'right', 
+                  targetHandle: 'left',  
                   type: "straight", 
                   animated: false,
                   style: { stroke: "#ec4899", strokeWidth: 2, strokeDasharray: "5,5" }, 
@@ -264,7 +280,6 @@ function FamilyManagerInner() {
     setModalMode("menu");
   }, []);
 
-  // --- NEW: UPLOAD LOGIC ---
   async function handleImageUpload(e) {
     if (!e.target.files || e.target.files.length === 0) return;
     setUploading(true);
@@ -410,6 +425,11 @@ function FamilyManagerInner() {
         <button onClick={resetLayout} className="bg-gray-800 hover:bg-gray-700 text-white p-2 rounded-full border border-gray-600 transition" title="Reset Layout"><RefreshCcw size={14} /></button>
       </div>
       <div className="absolute top-4 right-4 z-10 flex gap-2">
+          {/* --- NEW DOWNLOAD BUTTON --- */}
+          <button onClick={handleDownloadImage} className="bg-green-600 hover:bg-green-500 text-white px-4 py-2 rounded-full border border-green-500/50 transition text-sm font-bold flex items-center gap-2">
+            <Download size={14} /> Save Image
+          </button>
+
           <button onClick={handleResetTree} className="bg-red-500/10 hover:bg-red-500 text-red-500 hover:text-white px-4 py-2 rounded-full border border-red-500/50 transition text-sm font-bold">Reset Tree</button>
           <button onClick={() => supabase.auth.signOut()} className="bg-gray-800 hover:bg-gray-700 text-white px-4 py-2 rounded-full border border-gray-600 transition text-sm">Logout</button>
       </div>
@@ -461,7 +481,6 @@ function FamilyManagerInner() {
                 </div>
               )}
               
-              {/* --- NEW FILE UPLOAD SECTION --- */}
               <div className="flex items-center gap-4 bg-[#0f172a] p-3 rounded-lg border border-gray-700">
                   <div className="w-12 h-12 bg-gray-700 rounded-full overflow-hidden flex items-center justify-center border border-gray-500 relative group">
                       {formData.photo_url ? <img src={formData.photo_url} className="w-full h-full object-cover" /> : <User className="text-gray-400" />}
