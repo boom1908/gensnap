@@ -16,7 +16,7 @@ import ReactFlow, {
 import "reactflow/dist/style.css";
 import dagre from "dagre";
 import { toPng } from "html-to-image";
-import { User, X, Save, Plus, Trash2, Edit3, ArrowUp, ArrowDown, Link as LinkIcon, RefreshCcw, Loader2, Upload, Download } from "lucide-react";
+import { User, X, Save, Plus, Trash2, Edit3, ArrowUp, ArrowDown, Link as LinkIcon, RefreshCcw, Loader2, Upload, Download, Share2, Gift } from "lucide-react";
 
 // --- GOOGLE LOGO ---
 const GoogleIcon = () => (
@@ -30,6 +30,14 @@ const GoogleIcon = () => (
   </svg>
 );
 
+// --- HELPER: CHECK BIRTHDAY ---
+const isBirthdayToday = (dob) => {
+    if (!dob) return false;
+    const d = new Date(dob);
+    const today = new Date();
+    return d.getDate() === today.getDate() && d.getMonth() === today.getMonth();
+};
+
 // --- CUSTOM NODE ---
 const FamilyNode = ({ data }) => {
   function getPreciseAge(dob, isAlive) {
@@ -41,13 +49,20 @@ const FamilyNode = ({ data }) => {
     if (months < 0) { years--; months += 12; }
     return isAlive ? `${years}y` : `Died: ${years}y`;
   }
-  const borderColor = data.gender === "Male" ? "#3b82f6" : "#ec4899";
+  
+  const isBday = isBirthdayToday(data.dob);
+  const borderColor = isBday ? "#fbbf24" : (data.gender === "Male" ? "#3b82f6" : "#ec4899"); // Gold if birthday
+  const shadow = isBday ? "0 0 15px rgba(251, 191, 36, 0.6)" : "0 4px 6px -1px rgba(0, 0, 0, 0.5)";
+
   return (
-    <div style={{ background: "#1f2937", color: "white", border: `1px solid ${borderColor}`, borderRadius: "8px", padding: "10px", width: 180, fontSize: "12px", boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.5)", position: 'relative' }}>
+    <div style={{ background: "#1f2937", color: "white", border: `2px solid ${borderColor}`, borderRadius: "8px", padding: "10px", width: 180, fontSize: "12px", boxShadow: shadow, position: 'relative' }}>
       <Handle type="target" position={Position.Top} style={{ background: '#555' }} />
       <Handle type="source" position={Position.Bottom} style={{ background: '#555' }} />
       <Handle type="source" position={Position.Right} id="right" style={{ top: '50%', background: 'transparent', border: 'none' }} />
       <Handle type="target" position={Position.Left} id="left" style={{ top: '50%', background: 'transparent', border: 'none' }} />
+      
+      {isBday && <div className="absolute -top-3 -right-3 bg-yellow-400 text-black p-1 rounded-full animate-bounce"><Gift size={14}/></div>}
+
       <div className="flex flex-col items-center gap-2 pointer-events-none">
         <div className="w-10 h-10 rounded-full overflow-hidden border border-gray-500 bg-gray-800">
           {data.photo_url ? <img src={data.photo_url} className="w-full h-full object-cover" /> : <User className="p-2 w-full h-full text-gray-400"/>}
@@ -70,24 +85,17 @@ dagreGraph.setDefaultEdgeLabel(() => ({}));
 const nodeWidth = 200;
 const nodeHeight = 120;
 
-// Now layout only runs if DB positions are missing
 const getLayoutedElements = (nodes, edges) => {
   if (nodes.length === 0) return { nodes: [], edges: [] };
-  
-  // 1. Calculate Dagre positions (The "Auto" Plan)
   dagreGraph.setGraph({ rankdir: "TB", ranksep: 100, nodesep: 60 });
   nodes.forEach((node) => { dagreGraph.setNode(node.id, { width: nodeWidth, height: nodeHeight }); });
   edges.forEach((edge) => { if (edge.data && edge.data.isCouple) return; dagreGraph.setEdge(edge.source, edge.target); });
   dagre.layout(dagreGraph);
   
-  // 2. Decide: Use DB position OR Auto position
   const layoutedNodes = nodes.map((node) => {
-    // If the DB has a position (it's not null/0), USE IT.
     if (node.data.position_x != null && node.data.position_y != null) {
         return { ...node, position: { x: node.data.position_x, y: node.data.position_y } };
     }
-    
-    // Otherwise, use the Auto-Layout position
     const nodeWithPosition = dagreGraph.node(node.id);
     const x = nodeWithPosition ? nodeWithPosition.x - nodeWidth / 2 : 0;
     const y = nodeWithPosition ? nodeWithPosition.y - nodeHeight / 2 : 0;
@@ -104,6 +112,7 @@ function FamilyManagerInner() {
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [statusMsg, setStatusMsg] = useState("Ready");
+  const [readOnly, setReadOnly] = useState(false); // New Read-Only State
   
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
@@ -122,45 +131,44 @@ function FamilyManagerInner() {
   const [membersList, setMembersList] = useState([]); 
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      if (session) { restoreView(); fetchAndDrawGraph(); } else { setLoading(false); }
-    });
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
-      if (session) fetchAndDrawGraph();
-    });
-    return () => subscription.unsubscribe();
+    // Check for Share Link
+    const params = new URLSearchParams(window.location.search);
+    const shareId = params.get("share_id");
+
+    if (shareId) {
+        setReadOnly(true);
+        fetchAndDrawGraph(shareId);
+        setSession({ user: { id: "GUEST" } }); // Fake session for UI
+    } else {
+        supabase.auth.getSession().then(({ data: { session } }) => {
+          setSession(session);
+          if (session) { restoreView(); fetchAndDrawGraph(session.user.id); } else { setLoading(false); }
+        });
+        const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+          setSession(session);
+          if (session) fetchAndDrawGraph(session.user.id);
+        });
+        return () => subscription.unsubscribe();
+    }
   }, []);
 
-  // --- SAVE TO DATABASE ON DRAG STOP ---
   const onNodeDragStop = useCallback(async (event, node) => {
-      // Optimistic Update (Update UI instantly)
-      // Note: ReactFlow handles local UI update automatically.
-      
-      // Save to DB
+      if (readOnly) return; // Disable drag save in read-only
       await supabase.from("family_members").update({ 
           position_x: node.position.x, 
           position_y: node.position.y 
       }).eq("id", node.id);
-  }, []);
+  }, [readOnly]);
 
   const saveView = useCallback(() => {
+      if (readOnly) return;
       const view = getViewport();
       localStorage.setItem("gensnap-view", JSON.stringify(view));
-  }, [getViewport]);
+  }, [getViewport, readOnly]);
 
   const restoreView = () => {
       const savedView = JSON.parse(localStorage.getItem("gensnap-view"));
       if (savedView) setViewport(savedView);
-  };
-
-  const resetLayout = async () => {
-      if(confirm("Reset all node positions to default?")) {
-          // Clear DB positions
-          await supabase.from("family_members").update({ position_x: null, position_y: null }).neq("id", "00000000-0000-0000-0000-000000000000");
-          fetchAndDrawGraph();
-      }
   };
 
   const handleDownloadImage = () => {
@@ -183,9 +191,35 @@ function FamilyManagerInner() {
       }).catch((err) => { console.error(err); setStatusMsg("Download Error"); });
   };
 
-  async function fetchAndDrawGraph() {
+  // --- NEW: SHARE FUNCTION ---
+  const handleShare = async () => {
+      if (!session || readOnly) return;
+      const link = `${window.location.origin}?share_id=${session.user.id}`;
+      try {
+          await navigator.clipboard.writeText(link);
+          alert("Link Copied! Send it to anyone.\n\nThey can VIEW your tree, but they cannot EDIT it.");
+      } catch (err) {
+          prompt("Copy this link:", link);
+      }
+  };
+
+  async function fetchAndDrawGraph(targetUserId) {
+    if (!targetUserId) return;
     setStatusMsg("Syncing...");
-    const { data: members, error } = await supabase.from("family_members").select("*").order("dob");
+    
+    // IF ReadOnly -> Use RPC. IF Owner -> Use Standard Select
+    let members, error;
+    if (readOnly || (targetUserId && targetUserId !== session?.user?.id)) {
+        // Use the Secure Function we created in SQL
+        const res = await supabase.rpc('get_shared_tree', { target_user_id: targetUserId });
+        members = res.data;
+        error = res.error;
+    } else {
+        const res = await supabase.from("family_members").select("*").order("dob");
+        members = res.data;
+        error = res.error;
+    }
+
     if (error) { 
         console.error("Fetch error:", error);
         setStatusMsg("Error: " + error.message);
@@ -196,8 +230,10 @@ function FamilyManagerInner() {
     setStatusMsg(`Found ${members ? members.length : 0} people.`);
 
     if (!members || members.length === 0) {
-        setModalMode("me");
-        setFormData({ id: null, name: "", gender: "Male", dob: "", is_alive: true, photo_url: "", relation: "Me", parent_id: null, secondary_parent_id: null });
+        if (!readOnly) {
+             setModalMode("me");
+             setFormData({ id: null, name: "", gender: "Male", dob: "", is_alive: true, photo_url: "", relation: "Me", parent_id: null, secondary_parent_id: null });
+        }
         setLoading(false);
         setNodes([]); 
         setEdges([]);
@@ -208,7 +244,6 @@ function FamilyManagerInner() {
       id: m.id,
       type: 'familyMember',
       data: m,
-      // We pass the position here so layout engine sees it
       position: { x: m.position_x || 0, y: m.position_y || 0 }
     }));
 
@@ -242,10 +277,11 @@ function FamilyManagerInner() {
   }
 
   const onNodeClick = useCallback((event, node) => {
+    if (readOnly) return; // Disable clicks in read-only
     setTargetNode(node); 
     setFormData(node.data); 
     setModalMode("menu");
-  }, []);
+  }, [readOnly]);
 
   async function handleImageUpload(e) {
     if (!e.target.files || e.target.files.length === 0) return;
@@ -277,29 +313,18 @@ function FamilyManagerInner() {
     };
     try {
         let error = null;
-        if (modalMode === "me") {
-            const res = await supabase.from("family_members").insert([payload]).select();
-            error = res.error;
-        } 
-        else if (modalMode === "edit") {
-            const res = await supabase.from("family_members").update(payload).eq("id", formData.id).select();
-            error = res.error;
-        } 
+        if (modalMode === "me") { const res = await supabase.from("family_members").insert([payload]).select(); error = res.error; } 
+        else if (modalMode === "edit") { const res = await supabase.from("family_members").update(payload).eq("id", formData.id).select(); error = res.error; } 
         else if (modalMode === "add") {
-            if (placement === "child") {
-                const res = await supabase.from("family_members").insert([{ ...payload, parent_id: targetNode.id }]).select();
-                error = res.error;
-            } else if (placement === "parent") {
+            if (placement === "child") { const res = await supabase.from("family_members").insert([{ ...payload, parent_id: targetNode.id }]).select(); error = res.error; } 
+            else if (placement === "parent") {
                 const parentRes = await supabase.from("family_members").insert([payload]).select().single();
                 if (parentRes.error) throw parentRes.error;
-                if (parentRes.data) {
-                    const updateRes = await supabase.from("family_members").update({ parent_id: parentRes.data.id }).eq("id", targetNode.id);
-                    error = updateRes.error;
-                }
+                if (parentRes.data) { const updateRes = await supabase.from("family_members").update({ parent_id: parentRes.data.id }).eq("id", targetNode.id); error = updateRes.error; }
             }
         }
         if (error) { console.error(error); alert("Database Error: " + error.message); setStatusMsg("Error: " + error.message); } 
-        else { setStatusMsg("Saved!"); setModalMode("none"); setTimeout(() => { fetchAndDrawGraph().then(() => { if (modalMode === "me") { setTimeout(() => fitView(), 200); } }); }, 500); }
+        else { setStatusMsg("Saved!"); setModalMode("none"); setTimeout(() => { fetchAndDrawGraph(session.user.id).then(() => { if (modalMode === "me") { setTimeout(() => fitView(), 200); } }); }, 500); }
     } catch (err) { alert("Unexpected Error: " + err.message); setStatusMsg("Critical Error: " + err.message); }
     setSaving(false);
   }
@@ -310,7 +335,7 @@ function FamilyManagerInner() {
     await supabase.from("family_members").delete().eq("id", formData.id);
     setSaving(false);
     setModalMode("none"); 
-    fetchAndDrawGraph();
+    fetchAndDrawGraph(session.user.id);
   }
   
   async function handleAuth(e) {
@@ -360,16 +385,30 @@ function FamilyManagerInner() {
   return (
     <div className="w-screen h-screen bg-[#111827] flex flex-col">
       <div className="absolute top-4 left-4 z-10 flex gap-4">
-        <div className="bg-black/40 backdrop-blur px-4 py-2 rounded-full border border-gray-700 flex items-center gap-2">
-            <div className={`w-2 h-2 rounded-full ${statusMsg.includes("Error") ? "bg-red-500" : "bg-green-500"} animate-pulse`}></div>
-            <span className="font-bold text-gray-200 tracking-wide">GenSnap Graph</span>
-        </div>
-        <button onClick={resetLayout} className="bg-gray-800 hover:bg-gray-700 text-white p-2 rounded-full border border-gray-600 transition" title="Reset Layout"><RefreshCcw size={14} /></button>
+        {readOnly && <div className="bg-yellow-500 text-black px-4 py-2 rounded-full font-bold shadow-lg animate-pulse flex items-center gap-2">👀 Guest Mode (Read Only)</div>}
+        {!readOnly && (
+            <div className="bg-black/40 backdrop-blur px-4 py-2 rounded-full border border-gray-700 flex items-center gap-2">
+                <div className={`w-2 h-2 rounded-full ${statusMsg.includes("Error") ? "bg-red-500" : "bg-green-500"} animate-pulse`}></div>
+                <span className="font-bold text-gray-200 tracking-wide">GenSnap Graph</span>
+            </div>
+        )}
       </div>
       <div className="absolute top-4 right-4 z-10 flex gap-2">
-          <button onClick={handleDownloadImage} className="bg-green-600 hover:bg-green-500 text-white px-4 py-2 rounded-full border border-green-500/50 transition text-sm font-bold flex items-center gap-2"><Download size={14} /> Save Image</button>
-          <button onClick={handleResetTree} className="bg-red-500/10 hover:bg-red-500 text-red-500 hover:text-white px-4 py-2 rounded-full border border-red-500/50 transition text-sm font-bold">Reset Tree</button>
-          <button onClick={() => supabase.auth.signOut()} className="bg-gray-800 hover:bg-gray-700 text-white px-4 py-2 rounded-full border border-gray-600 transition text-sm">Logout</button>
+          {!readOnly && (
+            <button onClick={handleShare} className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-full border border-blue-500/50 transition text-sm font-bold flex items-center gap-2">
+                <Share2 size={14} /> Share
+            </button>
+          )}
+          <button onClick={handleDownloadImage} className="bg-green-600 hover:bg-green-500 text-white px-4 py-2 rounded-full border border-green-500/50 transition text-sm font-bold flex items-center gap-2"><Download size={14} /> Save</button>
+          {!readOnly && (
+              <>
+                <button onClick={handleResetTree} className="bg-red-500/10 hover:bg-red-500 text-red-500 hover:text-white px-4 py-2 rounded-full border border-red-500/50 transition text-sm font-bold">Reset</button>
+                <button onClick={() => supabase.auth.signOut()} className="bg-gray-800 hover:bg-gray-700 text-white px-4 py-2 rounded-full border border-gray-600 transition text-sm">Logout</button>
+              </>
+          )}
+          {readOnly && (
+              <a href="/" className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-full border border-blue-600 transition text-sm font-bold">Make My Own Tree</a>
+          )}
       </div>
       <div className="flex-1 w-full h-full">
         <ReactFlow nodes={nodes} edges={edges} nodeTypes={nodeTypes} onNodesChange={onNodesChange} onEdgesChange={onEdgesChange} onNodeClick={onNodeClick} onNodeDragStop={onNodeDragStop} onMoveEnd={saveView} fitView className="bg-[#111827]">
@@ -379,7 +418,7 @@ function FamilyManagerInner() {
         </ReactFlow>
       </div>
       <div className="bg-blue-900/80 text-white text-xs p-1 text-center font-mono">STATUS: {statusMsg}</div>
-      {modalMode !== "none" && (
+      {modalMode !== "none" && !readOnly && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-[#1e293b] rounded-2xl border border-gray-700 shadow-2xl w-full max-w-md overflow-hidden relative">
             <div className="bg-[#0f172a] p-4 border-b border-gray-700 flex justify-between items-center"><h2 className="font-bold text-lg text-white">{modalMode === "me" ? "Start Tree" : modalMode === "menu" ? targetNode?.data?.name : modalMode === "add" ? "Add Relative" : "Edit Profile"}</h2>{modalMode !== "me" && <button onClick={() => setModalMode("none")}><X className="text-gray-400 hover:text-white" /></button>}</div>
