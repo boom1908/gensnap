@@ -37,7 +37,16 @@ const getLayoutedElements = (nodes, edges, savedPositions = {}) => {
   if (nodes.length === 0) return { nodes: [], edges: [] };
   dagreGraph.setGraph({ rankdir: "TB", ranksep: 100, nodesep: 50 });
   nodes.forEach((node) => { dagreGraph.setNode(node.id, { width: nodeWidth, height: nodeHeight }); });
-  edges.forEach((edge) => { dagreGraph.setEdge(edge.source, edge.target); });
+  
+  edges.forEach((edge) => { 
+      // CRITICAL: We DO NOT tell the layout engine about "Couple" edges.
+      // If we did, it would try to put one spouse below the other.
+      // By skipping them here, spouses stay on the same level!
+      if (edge.data && edge.data.isCouple) return;
+
+      dagreGraph.setEdge(edge.source, edge.target); 
+  });
+  
   dagre.layout(dagreGraph);
   const layoutedNodes = nodes.map((node) => {
     if (savedPositions[node.id]) return { ...node, position: savedPositions[node.id] };
@@ -154,12 +163,37 @@ function FamilyManagerInner() {
     }));
 
     const newEdges = [];
+    const couplePairs = new Set(); // To ensure we only draw the line once per couple
+
     members.forEach((m) => {
+      // 1. Regular Parent-Child Edges
       if (m.parent_id) {
         newEdges.push({ id: `e-${m.parent_id}-${m.id}`, source: m.parent_id, target: m.id, type: "smoothstep", markerEnd: { type: MarkerType.ArrowClosed, color: "#4b5563" }, style: { stroke: "#4b5563", strokeWidth: 2 } });
       }
       if (m.secondary_parent_id) {
         newEdges.push({ id: `e-${m.secondary_parent_id}-${m.id}`, source: m.secondary_parent_id, target: m.id, type: "smoothstep", markerEnd: { type: MarkerType.ArrowClosed, color: "#4b5563" }, style: { stroke: "#4b5563", strokeWidth: 2 } });
+      }
+
+      // 2. COUPLE DETECTION (Draw dashed line between parents)
+      if (m.parent_id && m.secondary_parent_id) {
+          const p1 = m.parent_id;
+          const p2 = m.secondary_parent_id;
+          // Sort IDs so "Dad-Mom" is the same as "Mom-Dad"
+          const pairKey = [p1, p2].sort().join("-");
+
+          if (!couplePairs.has(pairKey)) {
+              couplePairs.add(pairKey);
+              newEdges.push({
+                  id: `couple-${pairKey}`,
+                  source: p1,
+                  target: p2,
+                  type: "straight", // Straight line for couples
+                  animated: false,
+                  style: { stroke: "#ec4899", strokeWidth: 2, strokeDasharray: "5,5" }, // PINK DASHED LINE
+                  data: { isCouple: true }, // Tag for Layout Engine
+                  selectable: false
+              });
+          }
       }
     });
 
@@ -193,7 +227,7 @@ function FamilyManagerInner() {
     const file = e.target.files[0];
     const fileExt = file.name.split(".").pop();
     const fileName = `${Date.now()}.${fileExt}`;
-    const filePath = `${session.user.id}/${fileName}`; // Folder per user
+    const filePath = `${session.user.id}/${fileName}`; 
 
     try {
         const { error: uploadError } = await supabase.storage.from("avatars").upload(filePath, file);
@@ -272,7 +306,6 @@ function FamilyManagerInner() {
   
   async function handleAuth(e) {
     e.preventDefault();
-    // AVION BACKDOOR REMOVED
     setLoading(true);
     if (authMode === "signup") {
         const { error } = await supabase.auth.signUp({ email, password });
