@@ -7,7 +7,7 @@ import ReactFlow, {
 import "reactflow/dist/style.css";
 import dagre from "dagre";
 import { toPng } from "html-to-image";
-import { User, X, Save, Plus, Trash2, Edit3, ArrowUp, ArrowDown, Link as LinkIcon, RefreshCcw, Loader2, Upload, Download, Share2, Gift, Search, Undo, Redo } from "lucide-react";
+import { User, X, Save, Plus, Trash2, Edit3, ArrowUp, ArrowDown, Link as LinkIcon, RefreshCcw, Loader2, Upload, Download, Share2, Gift, Search, Undo, Redo, Layout } from "lucide-react";
 
 const isBirthdayToday = (dob) => {
     if (!dob) return false;
@@ -142,6 +142,22 @@ function FamilyManagerInner() {
     if(upsertData.length > 0) await supabase.from("family_members").upsert(upsertData);
   };
 
+  // --- RESTORE LAYOUT (Clears custom positions) ---
+  const handleResetLayout = async () => {
+      if (!confirm("Reset positions to Auto-Layout? (This does not delete people)")) return;
+      takeSnapshot();
+      setSaving(true);
+      setStatusMsg("Resetting Layout...");
+      
+      // Set all positions to null for this user
+      await supabase.from("family_members").update({ position_x: null, position_y: null }).eq("user_id", session.user.id);
+      
+      // Refresh
+      await fetchAndDrawGraph(session.user.id);
+      setTimeout(() => fitView(), 200);
+      setSaving(false);
+  };
+
   const onNodeDragStart = useCallback(() => { takeSnapshot(); }, [takeSnapshot]);
   const onNodeDragStop = useCallback(async (event, node) => {
       if (readOnly) return;
@@ -212,12 +228,28 @@ function FamilyManagerInner() {
 
   return (
     <div className="w-screen h-screen bg-[#111827] flex flex-col">
+      <style dangerouslySetInnerHTML={{__html: `
+        .react-flow__controls { background-color: #1f2937 !important; border: 1px solid #374151 !important; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.5) !important; border-radius: 8px !important; overflow: hidden !important; }
+        .react-flow__controls-button { background-color: #1f2937 !important; border-bottom: 1px solid #374151 !important; border-radius: 0 !important; fill: white !important; }
+        .react-flow__controls-button svg { fill: white !important; }
+        .react-flow__controls-button:hover { background-color: #374151 !important; }
+        .react-flow__attribution { display: none !important; }
+      `}} />
       <div className="absolute top-4 left-4 z-10 flex gap-4">
         {readOnly && <div className="bg-yellow-500 text-black px-4 py-2 rounded-full font-bold shadow-lg animate-pulse flex items-center gap-2">👀 Guest Mode (Read Only)</div>}
         {!readOnly && (<div className="flex items-center gap-2"><div className="bg-black/40 backdrop-blur px-4 py-2 rounded-full border border-gray-700 flex items-center gap-2"><div className={`w-2 h-2 rounded-full ${statusMsg.includes("Error") ? "bg-red-500" : "bg-green-500"} animate-pulse`}></div><span className="font-bold text-gray-200 tracking-wide hidden sm:block">GenSnap</span></div><form onSubmit={handleSearch} className="relative group"><input type="text" placeholder="Search name..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="bg-gray-800 text-white pl-8 pr-2 py-2 rounded-full border border-gray-600 focus:border-blue-500 outline-none w-32 focus:w-48 transition-all text-sm"/><Search className="absolute left-2.5 top-2.5 text-gray-400" size={14}/></form></div>)}
       </div>
       <div className="absolute top-4 right-4 z-10 flex gap-2">
-          {!readOnly && (<><button onClick={handleUndo} disabled={past.length === 0} className="bg-gray-800 hover:bg-gray-700 disabled:opacity-50 text-white p-2 rounded-full border border-gray-600 transition" title="Undo"><Undo size={14} /></button><button onClick={handleRedo} disabled={future.length === 0} className="bg-gray-800 hover:bg-gray-700 disabled:opacity-50 text-white p-2 rounded-full border border-gray-600 transition" title="Redo"><Redo size={14} /></button><button onClick={handleShare} className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-full border border-blue-500/50 transition text-sm font-bold flex items-center gap-2"><Share2 size={14} /> Share</button></>)}
+          {!readOnly && (
+            <>
+              <button onClick={handleUndo} disabled={past.length === 0} className="bg-gray-800 hover:bg-gray-700 disabled:opacity-50 text-white p-2 rounded-full border border-gray-600 transition" title="Undo"><Undo size={14} /></button>
+              <button onClick={handleRedo} disabled={future.length === 0} className="bg-gray-800 hover:bg-gray-700 disabled:opacity-50 text-white p-2 rounded-full border border-gray-600 transition" title="Redo"><Redo size={14} /></button>
+              {/* --- NEW: RESET LAYOUT BUTTON --- */}
+              <button onClick={handleResetLayout} className="bg-gray-800 hover:bg-gray-700 text-white p-2 rounded-full border border-gray-600 transition" title="Reset Layout"><RefreshCcw size={14} /></button>
+              
+              <button onClick={handleShare} className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-full border border-blue-500/50 transition text-sm font-bold flex items-center gap-2"><Share2 size={14} /> Share</button>
+            </>
+          )}
           <button onClick={handleDownloadImage} className="bg-green-600 hover:bg-green-500 text-white px-4 py-2 rounded-full border border-green-500/50 transition text-sm font-bold flex items-center gap-2"><Download size={14} /> Save</button>
           {!readOnly && (<><button onClick={handleResetTree} className="bg-red-500/10 hover:bg-red-500 text-red-500 hover:text-white px-4 py-2 rounded-full border border-red-500/50 transition text-sm font-bold">Reset</button><button onClick={() => supabase.auth.signOut()} className="bg-gray-800 hover:bg-gray-700 text-white px-4 py-2 rounded-full border border-gray-600 transition text-sm">Logout</button></>)}
           {readOnly && (<a href="/" className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-full border border-blue-600 transition text-sm font-bold">Make My Own Tree</a>)}
