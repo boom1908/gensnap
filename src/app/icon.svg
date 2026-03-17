@@ -1,7 +1,17 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">
-  <rect width="24" height="24" rx="4" fill="#3d7fd4"/>
-  <circle cx="12" cy="6" r="2" fill="white"/>
-  <circle cx="6" cy="18" r="2" fill="white"/>
-  <circle cx="18" cy="18" r="2" fill="white"/>
-  <path d="M12 8v6M12 14l-6 4M12 14l6 4" stroke="white" stroke-width="2" stroke-linecap="round"/>
+  <defs>
+    <linearGradient id="gs-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#3d7fd4;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#6252cc;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <rect width="24" height="24" rx="6" fill="url(#gs-grad)"/>
+  
+  <path d="M6 8V6h2 M16 6h2v2 M6 16v2h2 M16 18h2v-2" stroke="rgba(255,255,255,0.4)" stroke-width="1.5" stroke-linecap="round" fill="none"/>
+  
+  <circle cx="12" cy="15" r="2" fill="white"/>
+  <circle cx="8" cy="9" r="1.5" fill="white"/>
+  <circle cx="16" cy="9" r="1.5" fill="white"/>
+  <path d="M12 15l-4-6 M12 15l4-6" stroke="white" stroke-width="1.5" stroke-linecap="round"/>
 </svg>
