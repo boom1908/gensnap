@@ -18,18 +18,35 @@ export default function Home() {
 
     if (isSignIn) {
       const { error } = await supabase.auth.signInWithPassword({ email, password });
-      if (error) {
-        setMessage(error.message);
-      } else {
-        setMessage('Successfully logged in! (Redirecting...)');
-        router.push('/dashboard');
-      }
+      if (error) setMessage(error.message);
+      else { setMessage('Successfully logged in! (Redirecting...)'); router.push('/dashboard'); }
     } else {
       const { error } = await supabase.auth.signUp({ email, password });
       if (error) setMessage(error.message);
       else setMessage('Check your email for the confirmation link!');
     }
     setLoading(false);
+  };
+
+  // THE HARD-WIRED GOOGLE ENGINE
+  const handleGoogleLogin = async () => {
+    console.log("🚨 PROOF: Google button was successfully clicked!");
+    setLoading(true);
+    setMessage('Connecting to Google...');
+    
+    const { data, error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: `${window.location.origin}/dashboard`,
+      },
+    });
+
+    console.log("🚨 PROOF: Supabase responded:", { data, error });
+
+    if (error) {
+      setMessage(error.message);
+      setLoading(false);
+    }
   };
 
   return (
@@ -58,38 +75,24 @@ export default function Home() {
 
         <div className="gs-field">
           <label className="gs-label">Email</label>
-          <input 
-            className="gs-input" 
-            type="email" 
-            placeholder="you@example.com" 
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-          />
+          <input className="gs-input" type="email" placeholder="you@example.com" value={email} onChange={(e) => setEmail(e.target.value)} />
         </div>
 
         <div className="gs-field">
           <label className="gs-label">Password</label>
           <div className="gs-input-wrap">
-            <input 
-              className="gs-input" 
-              type={showPassword ? 'text' : 'password'} 
-              placeholder="••••••••" 
-              style={{ paddingRight: '38px' }} 
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-            />
+            <input className="gs-input" type={showPassword ? 'text' : 'password'} placeholder="••••••••" style={{ paddingRight: '38px' }} value={password} onChange={(e) => setPassword(e.target.value)} />
             <span className="gs-eye" onClick={() => setShowPassword(!showPassword)}>👁</span>
           </div>
-          {isSignIn && <a className="gs-forgot">Forgot password?</a>}
         </div>
 
         {message && (
-          <p style={{ color: message.includes('Success') || message.includes('Check') ? '#4ade80' : '#f87171', fontSize: '12px', marginTop: '10px', textAlign: 'center' }}>
+          <p style={{ color: message.includes('Success') || message.includes('Connecting') || message.includes('Check') ? '#4ade80' : '#f87171', fontSize: '12px', marginTop: '10px', textAlign: 'center' }}>
             {message}
           </p>
         )}
 
-        <button className="gs-btn-primary" onClick={handleAuth} disabled={loading}>
+        <button type="button" className="gs-btn-primary" onClick={handleAuth} disabled={loading}>
           {loading ? 'Processing...' : (isSignIn ? 'Sign in' : 'Create account')}
         </button>
 
@@ -99,7 +102,8 @@ export default function Home() {
           <div className="gs-divider-line"></div>
         </div>
 
-        <button className="gs-btn-google">
+        {/* THE WIRED GOOGLE BUTTON */}
+        <button type="button" className="gs-btn-google" onClick={handleGoogleLogin} disabled={loading}>
           <svg width="16" height="16" viewBox="0 0 18 18" xmlns="http://www.w3.org/2000/svg">
             <path d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.874 2.684-6.615z" fill="#4285F4"/>
             <path d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 0 0 9 18z" fill="#34A853"/>
