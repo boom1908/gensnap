@@ -1,26 +1,56 @@
-@import "tailwindcss";
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  min-height: 100vh;
+  background: #0d1520;
+  font-family: 'DM Sans', sans-serif;
+  /* Removed the flex centering and padding that was squishing the dashboard! */
 }
+
+.gs-root {
+  min-height: 100vh; /* Moved the full-height centering here for the login page */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  overflow: hidden;
+  width: 100%;
+}
+
+.gs-bg-orb { position: fixed; border-radius: 50%; filter: blur(80px); pointer-events: none; }
+.gs-bg-orb-1 { width: 420px; height: 420px; background: rgba(24, 95, 165, 0.18); top: -100px; left: -100px; }
+.gs-bg-orb-2 { width: 260px; height: 260px; background: rgba(83, 74, 183, 0.15); bottom: 40px; right: 60px; }
+.gs-card { position: relative; width: 100%; max-width: 420px; background: rgba(255,255,255,0.04); border: 0.5px solid rgba(255,255,255,0.1); border-radius: 20px; padding: 2.5rem 2rem; backdrop-filter: blur(12px); }
+.gs-logo-row { display: flex; align-items: center; gap: 10px; margin-bottom: 0.4rem; }
+.gs-logo-icon { width: 36px; height: 36px; background: linear-gradient(135deg, #3d7fd4 0%, #6252cc 100%); border-radius: 10px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.gs-logo-icon svg { width: 18px; height: 18px; }
+.gs-title { font-family: 'Cormorant Garamond', Georgia, serif; font-size: 28px; font-weight: 600; color: #f0eeff; letter-spacing: 0.02em; }
+.gs-subtitle { font-size: 11px; font-weight: 300; color: rgba(200, 210, 255, 0.5); letter-spacing: 0.12em; text-transform: uppercase; margin-bottom: 2rem; }
+.gs-tabs { display: flex; background: rgba(255,255,255,0.04); border-radius: 10px; padding: 3px; margin-bottom: 1.8rem; }
+.gs-tab { flex: 1; padding: 7px; text-align: center; font-size: 12px; font-weight: 400; color: rgba(180,195,255,0.45); cursor: pointer; border-radius: 8px; transition: background 0.2s, color 0.2s; letter-spacing: 0.04em; user-select: none; }
+.gs-tab.active { background: rgba(255,255,255,0.09); color: rgba(225,235,255,0.9); font-weight: 500; }
+.gs-field { margin-bottom: 1rem; }
+.gs-label { font-size: 10px; font-weight: 500; letter-spacing: 0.14em; text-transform: uppercase; color: rgba(180, 195, 255, 0.55); display: block; margin-bottom: 6px; }
+.gs-input { width: 100%; background: rgba(255,255,255,0.05); border: 0.5px solid rgba(255,255,255,0.12); border-radius: 10px; padding: 11px 14px; font-family: 'DM Sans', sans-serif; font-size: 14px; color: #e8eeff; outline: none; transition: border-color 0.2s, background 0.2s; }
+.gs-input:focus { border-color: rgba(90, 130, 220, 0.55); background: rgba(255,255,255,0.07); }
+.gs-input::placeholder { color: rgba(180,190,230,0.3); }
+.gs-input-wrap { position: relative; }
+.gs-eye { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); cursor: pointer; color: rgba(180,195,255,0.4); font-size: 15px; user-select: none; padding: 4px; line-height: 1; }
+.gs-eye:hover { color: rgba(180,195,255,0.8); }
+.gs-forgot { font-size: 11px; color: rgba(130,160,230,0.6); text-align: right; display: block; margin-top: 6px; cursor: pointer; text-decoration: none; }
+.gs-forgot:hover { color: rgba(160,185,255,0.9); }
+.gs-btn-primary { width: 100%; margin-top: 1.4rem; padding: 12px; background: linear-gradient(135deg, #2d6ccc 0%, #5242bb 100%); border: none; border-radius: 10px; font-family: 'DM Sans', sans-serif; font-size: 14px; font-weight: 500; color: #fff; cursor: pointer; letter-spacing: 0.03em; transition: opacity 0.2s, transform 0.15s; }
+.gs-btn-primary:hover { opacity: 0.88; transform: translateY(-1px); }
+.gs-btn-primary:active { transform: scale(0.98); }
+.gs-divider { display: flex; align-items: center; gap: 10px; margin: 1.2rem 0; }
+.gs-divider-line { flex: 1; height: 0.5px; background: rgba(255,255,255,0.1); }
+.gs-divider-text { font-size: 11px; color: rgba(180,195,255,0.35); letter-spacing: 0.05em; }
+.gs-btn-google { width: 100%; padding: 11px; background: rgba(255,255,255,0.05); border: 0.5px solid rgba(255,255,255,0.12); border-radius: 10px; font-family: 'DM Sans', sans-serif; font-size: 13px; font-weight: 400; color: rgba(220,230,255,0.8); cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 9px; transition: background 0.2s, border-color 0.2s; letter-spacing: 0.02em; }
+.gs-btn-google:hover { background: rgba(255,255,255,0.08); border-color: rgba(255,255,255,0.2); }
+.gs-footer { margin-top: 1.5rem; text-align: center; font-size: 12px; color: rgba(170,185,230,0.45); }
+.gs-footer span { color: rgba(130,165,245,0.75); cursor: pointer; }
+.gs-footer span:hover { color: rgba(160,190,255,0.95); }
