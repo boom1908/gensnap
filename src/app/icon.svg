@@ -5,13 +5,9 @@
       <stop offset="100%" style="stop-color:#6252cc;stop-opacity:1" />
     </linearGradient>
   </defs>
-  
   <rect width="24" height="24" rx="6" fill="url(#gs-grad)"/>
-  
-  <path d="M6 8V6h2 M16 6h2v2 M6 16v2h2 M16 18h2v-2" stroke="rgba(255,255,255,0.4)" stroke-width="1.5" stroke-linecap="round" fill="none"/>
-  
-  <circle cx="12" cy="15" r="2" fill="white"/>
-  <circle cx="8" cy="9" r="1.5" fill="white"/>
-  <circle cx="16" cy="9" r="1.5" fill="white"/>
-  <path d="M12 15l-4-6 M12 15l4-6" stroke="white" stroke-width="1.5" stroke-linecap="round"/>
+  <path d="M12 18v-5 M12 13l-4-4 M12 13l4-4 M8 9v-3 M16 9v-3" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="8" cy="5" r="1.5" fill="white"/>
+  <circle cx="16" cy="5" r="1.5" fill="white"/>
+  <circle cx="12" cy="19" r="1.5" fill="white"/>
 </svg>

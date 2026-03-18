@@ -2,7 +2,7 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useRouter } from 'next/navigation';
-import { LogOut, Network, ChevronRight, Link as LinkIcon, UserPlus, Trash2, RefreshCw, Edit3, Eye, Camera, Check } from 'lucide-react';
+import { LogOut, Network, ChevronRight, Link as LinkIcon, UserPlus, Trash2, RefreshCw, Edit3, Eye, Camera, Check, HelpCircle, X } from 'lucide-react';
 import TreeCanvas from '@/components/TreeCanvas';
 import Cropper from 'react-easy-crop';
 
@@ -16,7 +16,9 @@ export default function Dashboard() {
   const [selectedNode, setSelectedNode] = useState<any>(null);
   const [panelLoading, setPanelLoading] = useState(false);
   
-  // ROOT PERSON STATES (Restored!)
+  // INSTRUCTIONS MODAL STATE
+  const [showInstructions, setShowInstructions] = useState(false);
+
   const [rootName, setRootName] = useState('');
   const [rootGender, setRootGender] = useState('Male');
 
@@ -46,6 +48,15 @@ export default function Dashboard() {
     };
     checkUserAndFetchData();
   }, [router]);
+
+  // AUTO-TRIGGER INSTRUCTIONS ONCE PER DEVICE
+  useEffect(() => {
+    const hasSeen = localStorage.getItem('gs_has_seen_instructions');
+    if (!hasSeen) {
+      setShowInstructions(true);
+      localStorage.setItem('gs_has_seen_instructions', 'true');
+    }
+  }, []);
 
   const handleNodeClick = (node: any) => { 
     setSelectedNode(node); setRelName(''); setRelType('Child'); setRelGender('Male'); 
@@ -104,7 +115,6 @@ export default function Dashboard() {
   const currentParent1 = selectedNode ? members.find(m => m.id === selectedNode.parent_id) : null;
   const currentParent2 = selectedNode ? members.find(m => m.id === selectedNode.secondary_parent_id) : null;
 
-  // NEW: Add Root Person Logic
   const handleAddRoot = async (e: React.FormEvent) => {
     e.preventDefault(); if (!rootName || !userId) return; setLoading(true);
     const newMember = { user_id: userId, name: rootName, gender: rootGender, relation: 'Me', is_alive: true, parent_id: null, secondary_parent_id: null, spouse_id: null };
@@ -157,6 +167,61 @@ export default function Dashboard() {
   return (
     <div style={{ height: '100vh', backgroundColor: '#0d1520', color: '#f0eeff', fontFamily: 'sans-serif', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       
+      {/* INSTRUCTIONS MODAL OVERLAY */}
+      {showInstructions && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 1000, backgroundColor: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(5px)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ background: 'linear-gradient(180deg, #121c2b 0%, #0d1520 100%)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '16px', padding: '2.5rem', maxWidth: '600px', width: '90%', maxHeight: '90vh', overflowY: 'auto', position: 'relative', boxShadow: '0 20px 40px rgba(0,0,0,0.5)' }}>
+            
+            <button onClick={() => setShowInstructions(false)} style={{ position: 'absolute', top: '1rem', right: '1rem', background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.5)', cursor: 'pointer' }}><X size={24} /></button>
+            
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '1.5rem', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '1rem' }}>
+              <div style={{ width: '40px', height: '40px', background: 'linear-gradient(135deg, #3d7fd4 0%, #6252cc 100%)', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><HelpCircle size={22} color="white" /></div>
+              <h2 style={{ fontSize: '1.5rem', fontWeight: 600 }}>Welcome to GenSnap</h2>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', color: 'rgba(200,210,255,0.8)', fontSize: '14px', lineHeight: '1.6' }}>
+              <div>
+                <h3 style={{ color: 'white', fontSize: '15px', marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '8px' }}><span>1.</span> View Mode vs. Edit Mode</h3>
+                <ul style={{ paddingLeft: '1.5rem', margin: 0 }}>
+                  <li style={{ marginBottom: '6px' }}><strong style={{color: '#90b8f8'}}>👁️ View Mode (Safe Mode):</strong> Use this to safely explore your tree. You can pan around the canvas and click on any person to view their beautiful, read-only profile card.</li>
+                  <li><strong style={{color: '#90b8f8'}}>✏️ Edit Mode:</strong> Toggle this on to unlock "God Mode." This allows you to drag cards, edit profiles, and add new relatives.</li>
+                </ul>
+              </div>
+
+              <div>
+                <h3 style={{ color: 'white', fontSize: '15px', marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '8px' }}><span>2.</span> Building Your Tree</h3>
+                <ul style={{ paddingLeft: '1.5rem', margin: 0 }}>
+                  <li style={{ marginBottom: '6px' }}><strong>Adding People:</strong> In Edit Mode, click on any person to open the side panel. Scroll down to "Create New Relative" to instantly attach a Parent, Child, Sibling, or Spouse.</li>
+                  <li style={{ marginBottom: '6px' }}><strong>Linking Existing Relatives:</strong> Have a child that needs to be linked to their second parent? Or two existing people who are married? Use the <strong style={{color: '#3d7fd4'}}>Link Parent</strong> or <strong style={{color: '#fbbf24'}}>Link Couple</strong> dropdowns in the side panel to connect them.</li>
+                  <li style={{ fontSize: '12px', color: 'rgba(255,255,255,0.5)', listStyleType: 'none', marginLeft: '-1.5rem' }}><em>*Note: Bloodlines are solid, and Marriages are marked with a dashed yellow line.</em></li>
+                </ul>
+              </div>
+
+              <div>
+                <h3 style={{ color: 'white', fontSize: '15px', marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '8px' }}><span>3.</span> Organizing the Canvas</h3>
+                <ul style={{ paddingLeft: '1.5rem', margin: 0 }}>
+                  <li style={{ marginBottom: '6px' }}>In Edit Mode, you can click and drag any card to anywhere on the screen. The lines will stretch like rubber bands! Your custom layout is automatically saved to the cloud.</li>
+                  <li><strong>Reset Layout:</strong> If your tree gets too messy, click the "Reset Layout" button at the top to let the math engine organize everyone into a grid again.</li>
+                </ul>
+              </div>
+
+              <div>
+                <h3 style={{ color: 'white', fontSize: '15px', marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '8px' }}><span>4.</span> Personalizing Profiles</h3>
+                <ul style={{ paddingLeft: '1.5rem', margin: 0 }}>
+                  <li style={{ marginBottom: '6px' }}><strong>Avatars:</strong> In Edit Mode, click on a person and select "Upload & Crop Image" to add a profile picture. Our engine automatically crops and compresses the photo.</li>
+                  <li><strong>Smart Details:</strong> Add their Date of Birth, and GenSnap will automatically calculate their exact age on their card. You can also mark their living status and their specific relation to you.</li>
+                </ul>
+              </div>
+            </div>
+
+            <button onClick={() => setShowInstructions(false)} style={{ marginTop: '2rem', width: '100%', background: 'linear-gradient(135deg, #3d7fd4 0%, #6252cc 100%)', color: 'white', border: 'none', padding: '14px', borderRadius: '10px', fontSize: '15px', fontWeight: 600, cursor: 'pointer', boxShadow: '0 4px 14px rgba(61, 127, 212, 0.4)' }}>
+              Got it! Let's build.
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* CROP MODAL */}
       {imageSrc && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 100, backgroundColor: 'rgba(0,0,0,0.9)', display: 'flex', flexDirection: 'column' }}>
           <div style={{ flex: 1, position: 'relative' }}><Cropper image={imageSrc} crop={crop} zoom={zoom} aspect={1} cropShape="round" showGrid={false} onCropChange={setCrop} onCropComplete={onCropComplete} onZoomChange={setZoom} /></div>
@@ -169,14 +234,19 @@ export default function Dashboard() {
 
       <nav style={{ zIndex: 10, display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '1rem 2rem', background: 'rgba(13, 21, 32, 0.8)', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}><div style={{ width: '32px', height: '32px', background: 'linear-gradient(135deg, #3d7fd4 0%, #6252cc 100%)', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Network size={18} color="white" /></div><h1 style={{ fontSize: '1.2rem', fontWeight: 600 }}>GenSnap Workspace</h1></div>
+        
         <div style={{ display: 'flex', gap: '15px' }}>
+          {/* THE NEW INSTRUCTIONS BUTTON */}
+          <button onClick={() => setShowInstructions(true)} style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: 'white', padding: '8px 16px', borderRadius: '8px', cursor: 'pointer', transition: 'all 0.2s' }}>
+            <HelpCircle size={16} /><span style={{ fontSize: '13px', fontWeight: 500 }}>Instructions</span>
+          </button>
+
           <button onClick={() => { setIsEditMode(!isEditMode); setSelectedNode(null); }} style={{ display: 'flex', alignItems: 'center', gap: '8px', background: isEditMode ? 'rgba(61, 127, 212, 0.2)' : 'transparent', border: `1px solid ${isEditMode ? '#3d7fd4' : 'rgba(255,255,255,0.2)'}`, color: isEditMode ? '#90b8f8' : 'white', padding: '8px 16px', borderRadius: '8px', cursor: 'pointer' }}>{isEditMode ? <Edit3 size={16} /> : <Eye size={16} />}<span style={{ fontSize: '13px', fontWeight: 500 }}>{isEditMode ? 'Edit Mode' : 'View Mode'}</span></button>
           {isEditMode && <button onClick={handleResetLayout} style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'rgba(251, 191, 36, 0.1)', border: '1px solid rgba(251, 191, 36, 0.3)', color: '#fbbf24', padding: '8px 16px', borderRadius: '8px', cursor: 'pointer' }}><RefreshCw size={16} /><span style={{ fontSize: '13px', fontWeight: 500 }}>Reset Layout</span></button>}
           <button onClick={handleLogout} style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'transparent', border: '1px solid rgba(255,255,255,0.1)', color: 'rgba(200, 210, 255, 0.7)', padding: '8px 16px', borderRadius: '8px', cursor: 'pointer' }}><LogOut size={16} /><span style={{ fontSize: '13px' }}>Sign Out</span></button>
         </div>
       </nav>
 
-      {/* FIXED EMPTY STATE DISPLAY */}
       <main style={{ flex: 1, position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         {loading ? ( 
           <p style={{ color: 'rgba(200, 210, 255, 0.5)' }}>Loading your lineage...</p> 
@@ -200,7 +270,6 @@ export default function Dashboard() {
         {/* SIDE PANEL */}
         {members.length > 0 && selectedNode && (
           <div style={{ position: 'absolute', top: 0, right: 0, bottom: 0, width: '420px', background: 'rgba(18, 28, 43, 0.95)', backdropFilter: 'blur(20px)', borderLeft: '1px solid rgba(255,255,255,0.1)', padding: '2rem', transform: selectedNode ? 'translateX(0)' : 'translateX(100%)', transition: 'transform 0.3s ease', zIndex: 20, overflowY: 'auto' }}>
-            {/* Same Side panel UI logic as before... */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
                 <h2 style={{ fontSize: '1.2rem', fontWeight: 600, color: 'white' }}>{isEditMode ? 'Settings' : 'Profile'}</h2>
                 <button onClick={() => setSelectedNode(null)} style={{ background: 'rgba(255,255,255,0.05)', border: 'none', color: 'white', padding: '6px', borderRadius: '50%', cursor: 'pointer' }}><ChevronRight size={20} /></button>
