@@ -19,7 +19,7 @@ export default function TreeCanvas({ data, onNodeClick, onNodeMove, isEditMode =
     data.forEach(member => {
       g.setNode(member.id, { 
         label: member.name, 
-        width: 240, // Made slightly wider for the photo
+        width: 240,
         height: 85, 
         gender: member.gender, 
         relation: member.relation, 
@@ -87,16 +87,19 @@ export default function TreeCanvas({ data, onNodeClick, onNodeMove, isEditMode =
 
   const drawCurve = (source: any, target: any) => `M ${source.x},${source.y + 42} C ${source.x},${source.y + 80} ${target.x},${target.y - 80} ${target.x},${target.y - 42}`;
 
-  const getSubtext = (raw: any) => {
+  // NEW: Formatting function specifically for DOB and Age together
+  const getDetailsText = (raw: any) => {
     let parts = [];
-    if (raw.relation && raw.relation !== 'Child' && raw.relation !== 'Parent' && raw.relation !== 'Spouse' && raw.relation !== 'Sibling') parts.push(raw.relation); 
     if (raw.dob) {
       const birthDate = new Date(raw.dob);
       const today = new Date();
       let age = today.getFullYear() - birthDate.getFullYear();
       const m = today.getMonth() - birthDate.getMonth();
       if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) age--;
-      parts.push(`Age ${age}`);
+      
+      // Format to DD-MM-YYYY
+      const dobString = `${birthDate.getDate().toString().padStart(2, '0')}-${(birthDate.getMonth() + 1).toString().padStart(2, '0')}-${birthDate.getFullYear()}`;
+      parts.push(`${dobString} (Age ${age})`);
     }
     if (raw.is_alive === false) parts.push("Deceased");
     return parts.join(" • ");
@@ -150,9 +153,16 @@ export default function TreeCanvas({ data, onNodeClick, onNodeMove, isEditMode =
                 )}
               </g>
 
-              {/* Shifted Name and Subtext to the right of the avatar */}
-              <text x={140} y={node.height / 2 - 2} fill="#f0eeff" fontSize="16" fontWeight="600" textAnchor="middle" fontFamily="sans-serif" style={{ pointerEvents: 'none' }}>{node.label}</text>
-              <text x={140} y={node.height / 2 + 18} fill="rgba(200,210,255,0.6)" fontSize="12" fontWeight="400" textAnchor="middle" fontFamily="sans-serif" style={{ pointerEvents: 'none' }}>{getSubtext(node.raw)}</text>
+              {/* THREE-LINE TEXT LAYOUT */}
+              
+              {/* 1. Name */}
+              <text x={140} y={node.height / 2 - 12} fill="#f0eeff" fontSize="16" fontWeight="600" textAnchor="middle" fontFamily="sans-serif" style={{ pointerEvents: 'none' }}>{node.label}</text>
+              
+              {/* 2. Relation (e.g., Chechi) - Styled in soft gold to stand out */}
+              <text x={140} y={node.height / 2 + 6} fill="#fbbf24" fontSize="12" fontWeight="500" textAnchor="middle" fontFamily="sans-serif" style={{ pointerEvents: 'none' }}>{node.raw.relation}</text>
+              
+              {/* 3. DOB & Age */}
+              <text x={140} y={node.height / 2 + 22} fill="rgba(200,210,255,0.6)" fontSize="11" fontWeight="400" textAnchor="middle" fontFamily="sans-serif" style={{ pointerEvents: 'none' }}>{getDetailsText(node.raw)}</text>
             </g>
           );
         })}
